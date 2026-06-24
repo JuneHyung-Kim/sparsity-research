@@ -1,0 +1,11 @@
+# Python environment (5 GB — never commit)
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local Claude Code harness settings
+.claude/
+
+# OS
+.DS_Store
