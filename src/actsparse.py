@@ -34,9 +34,13 @@ class SparseMLP(nn.Module):
         self.ctrl = ctrl          # shared {"masker": fn|None, "recorder": fn|None}
         self.idx = idx
         # ||down_proj[:, i]||_2 per neuron i (weight is [hidden, intermediate]).
-        self.register_buffer(
-            "col_norm", mlp.down_proj.weight.detach().float().norm(dim=0),
-            persistent=False)
+        # Under weight-only quantization (bnb int8/4bit) the stored .weight is
+        # packed integers, not a float matrix — column norms are unavailable
+        # without a dequant. oracle_gate (rank by |a|) doesn't need them, so we
+        # leave col_norm None there; only contribution-aware paths require it.
+        w = mlp.down_proj.weight
+        col_norm = w.detach().float().norm(dim=0) if w.is_floating_point() else None
+        self.register_buffer("col_norm", col_norm, persistent=False)
 
     def forward(self, x):
         m = self.mlp

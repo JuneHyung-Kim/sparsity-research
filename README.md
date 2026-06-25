@@ -82,10 +82,21 @@ shared `ctrl["masker"]` (per-token top-k / random), then `down_proj`. Mutate
 ## Layout
 
 ```
-run_oracle.py       # (method × sparsity) -> PPL CSV
-characterize.py     # intrinsic sparsity headroom per layer
-plot.py             # CSV -> PPL-vs-sparsity figure
-src/actsparse.py    # SparseMLP wrapper, per-token maskers, MassRecorder
-src/eval_ppl.py     # WikiText-2 perplexity
-src/data.py         # WikiText-2 loader
+# expr1 — dense LLaMA-2-7B (results/SUMMARY.md)
+run_oracle.py            # (method × sparsity) -> PPL CSV
+characterize.py          # intrinsic sparsity headroom per layer
+plot.py                  # CSV -> PPL-vs-sparsity figure
+src/actsparse.py         # SparseMLP wrapper, per-token maskers, MassRecorder
+src/eval_ppl.py          # WikiText-2 perplexity
+src/data.py              # WikiText-2 loader
+
+# expr2 / Q1 — MoE active-expert intra-sparsity (Qwen3-MoE)
+characterize_moe.py      # intra-expert headroom per layer
+run_oracle_moe.py        # oracle PPL vs intra-expert sparsity
+src/moe.py               # recording/oracle experts-forward hook
+
+# expr3 / Q2 — activation sparsity under weight quantization (results/SUMMARY_expr3.md)
+run_oracle_quant.py      # oracle PPL vs sparsity for fp16 / int8 / NF4
+run_ranking_stability.py # kept-set overlap fp16 vs quantized
+plot_expr3.py            # CSV/npz -> the two expr3 figures (no GPU)
 ```

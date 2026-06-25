@@ -7,5 +7,7 @@ __pycache__/
 # Local Claude Code harness settings
 .claude/
 
-# OS
+# OS / editor
 .DS_Store
+*.swp
+*.swo
