@@ -100,17 +100,19 @@ One sparsity point at a time, then plot the sweep:
 ### On a SLURM cluster (Vulcan / DRAC, L40S 46 GB)
 
 Login node has internet but no GPU; compute nodes have GPUs but no internet, so
-the venvs and the model are prepared on the login node (onto scratch) and the
-sweep runs offline under SLURM. After `git clone`:
+the venvs and the model are prepared on the login node and the sweep runs
+offline under SLURM. Clone into your own dir under the project space
+(`~/projects/aip-nanditav/sankeert/<you>/`):
 
 ```bash
-source vulcan/env.sh        # scratch caches, uv, two venv paths, SLURM account
+source vulcan/env.sh        # project-space caches, uv, two venv paths, SLURM account
 bash vulcan/setup.sh        # LOGIN node: build both venvs + pre-download Qwen3-8B
 sbatch vulcan/bfcl_sweep.slurm    # one L40S, offline; sweeps + writes the figure
 ```
 
-`vulcan/env.sh` keeps the venvs, HF cache, and `bfcl_run_s*` outputs on
-`$SCRATCH` (home has tight quotas) and is fully overridable. Sweep knobs:
+`vulcan/env.sh` keeps the venvs, HF cache, and `bfcl_run_s*` outputs under
+`$MYPROJ` (default `~/projects/aip-nanditav/sankeert/jhkim`); everything is
+overridable. Sweep knobs:
 
 ```bash
 sbatch --export=ALL,SPARSITIES="0 0.3 0.5 0.7 0.8",CATS=simple_python,irrelevance,METHOD=oracle_gate \

@@ -1,33 +1,33 @@
 # Source me FIRST on the Vulcan/DRAC cluster (login or compute node):
 #   source vulcan/env.sh
 #
-# Sets scratch-backed caches (home has tight quotas), the uv toolchain path,
-# the two venv locations this repo uses, the BFCL output dir, and the SLURM
-# account. Everything is overridable: `export MYSCRATCH=... ` before sourcing
-# (or edit below) if your cluster layout differs.
+# Puts this repo's venvs, HF cache, and outputs under the project space
+# ($MYPROJ). All paths are overridable: export them before sourcing.
 
-export SCRATCH="${SCRATCH:-/scratch/$USER}"
-# Personal subdir inside the (possibly shared) scratch allocation.
-export MYSCRATCH="${MYSCRATCH:-$SCRATCH/jhkim}"
-export TMPDIR="${TMPDIR:-$MYSCRATCH/tmp}"
+# Project allocation (~/projects is the /project filesystem).
+export PROJ_BASE="${PROJ_BASE:-$HOME/projects/aip-nanditav/sankeert}"
+# Our own directory under it (everything this repo writes goes here).
+export MYPROJ="${MYPROJ:-$PROJ_BASE/jhkim}"
 
-# HuggingFace cache on scratch, shared between login (download) and compute
-# (offline read). hf_transfer off (not installed).
-export HF_HOME="${HF_HOME:-$SCRATCH/hf}"
+export TMPDIR="${TMPDIR:-$MYPROJ/tmp}"
+
+# HuggingFace cache, shared between login (download) and compute (offline read).
+# Re-downloadable, so override HF_HOME before sourcing if you want it elsewhere.
+export HF_HOME="${HF_HOME:-$MYPROJ/hf}"
 export HF_HUB_ENABLE_HF_TRANSFER=0
 
-# uv lives on scratch and goes on PATH.
-export UV_INSTALL_DIR="${UV_INSTALL_DIR:-$SCRATCH/uv/bin}"
-export UV_CACHE_DIR="${UV_CACHE_DIR:-$SCRATCH/uv/cache}"
+# uv toolchain (kept under the project space).
+export UV_INSTALL_DIR="${UV_INSTALL_DIR:-$MYPROJ/uv/bin}"
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$MYPROJ/uv/cache}"
 export PATH="$UV_INSTALL_DIR:$PATH"
 
-# This repo's two venvs (kept on scratch, not in $HOME). run_bfcl.sh reads
-# $VENV (masker + HF server) and $BFCL_VENV (the bfcl CLI).
-export VENV="${VENV:-$MYSCRATCH/sparsity-research-venv}"
-export BFCL_VENV="${BFCL_VENV:-$MYSCRATCH/sparsity-research-bfcl-venv}"
+# This repo's two venvs. run_bfcl.sh reads $VENV (masker + HF server) and
+# $BFCL_VENV (the bfcl CLI).
+export VENV="${VENV:-$MYPROJ/sparsity-research-venv}"
+export BFCL_VENV="${BFCL_VENV:-$MYPROJ/sparsity-research-bfcl-venv}"
 
-# Where bfcl_run_s* roots and the figure/CSV land (off home).
-export ACTIVATION_SPARSITY_OUTPUTS="${ACTIVATION_SPARSITY_OUTPUTS:-$MYSCRATCH/outputs/sparsity-research}"
+# Where bfcl_run_s* roots and the figure/CSV land.
+export ACTIVATION_SPARSITY_OUTPUTS="${ACTIVATION_SPARSITY_OUTPUTS:-$MYPROJ/outputs/sparsity-research}"
 
 # SLURM account (DRAC/Alliance).
 export SLURM_ACCOUNT="${SLURM_ACCOUNT:-aip-nanditav}"
