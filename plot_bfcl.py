@@ -52,12 +52,30 @@ def collect(runs_dir):
     return rows
 
 
+def pivot_table(rows):
+    """Markdown table: one row per sparsity, one accuracy column per category."""
+    cats = sorted(rows)
+    sps = sorted({p[0] for pts in rows.values() for p in pts})
+    acc = {(cat, s): None for cat in cats for s in sps}
+    for cat, pts in rows.items():
+        for s, a, c, t in pts:
+            acc[(cat, s)] = a
+    lines = ["| sparsity | " + " | ".join(cats) + " |",
+             "|" + "---|" * (len(cats) + 1)]
+    for s in sps:
+        cells = [f"{acc[(cat, s)] * 100:.2f}%" if acc[(cat, s)] is not None else "—"
+                 for cat in cats]
+        lines.append(f"| {s:.2f} | " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs-dir", default=".",
                     help="dir that contains the bfcl_run_s* project roots")
     ap.add_argument("--out", default="results/bfcl_acc_vs_sparsity.png")
     ap.add_argument("--csv", default="results/bfcl_acc_vs_sparsity.csv")
+    ap.add_argument("--md", default="results/bfcl_acc_vs_sparsity.md")
     ap.add_argument("--title", default="BFCL accuracy vs activation sparsity (Qwen3-8B)")
     args = ap.parse_args()
 
@@ -74,6 +92,13 @@ def main():
             for s, acc, c, t in pts:
                 w.writerow([cat, s, acc, c, t])
     print(f"wrote {args.csv}")
+
+    # Pivot table: accuracy (%) by sparsity x category. Printed and saved as md.
+    table = pivot_table(rows)
+    print(f"\n{args.title}\n{table}\n")
+    with open(args.md, "w") as fh:
+        fh.write(f"# {args.title}\n\n{table}\n")
+    print(f"wrote {args.md}")
 
     plt.figure(figsize=(7, 5))
     for cat, pts in sorted(rows.items()):
