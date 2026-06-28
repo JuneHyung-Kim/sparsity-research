@@ -8,6 +8,13 @@
 # torch 2.6 / CUDA 12.4 and would clobber the research venv's torch 2.12.
 # We never use vLLM here: the masker lives in the HF model served by
 # bfcl_server.py, and BFCL talks to it over HTTP with --skip-server-setup.
-# Core bfcl-eval is light and conflict-free; AST categories (simple_python,
-# irrelevance, ...) ship their data in the package — no download needed.
+# AST categories (simple_python, irrelevance, ...) ship their data in the
+# package — no download needed.
 bfcl-eval==2026.3.23
+# bfcl-eval's Qwen FC handler imports qwen_agent, whose qwen_agent.utils.utils
+# does a top-level `import soundfile`. soundfile is NOT a declared dependency of
+# qwen-agent, so an unpinned install can omit it and the run dies with
+# ModuleNotFoundError: No module named 'soundfile'. Pin both so every install
+# matches the working set (qwen-agent 0.0.34; librosa is not needed).
+qwen-agent==0.0.34
+soundfile==0.14.0
