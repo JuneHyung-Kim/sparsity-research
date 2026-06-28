@@ -22,7 +22,7 @@ set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 source vulcan/env.sh
 
-# Compute nodes have no internet: read models from the scratch HF cache only.
+# Compute nodes have no internet: read the model from the scratch HF cache only.
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 
@@ -30,8 +30,8 @@ METHOD="${METHOD:-oracle_gate}"
 CATS="${CATS:-simple_python,irrelevance}"
 SPARSITIES="${SPARSITIES:-0 0.5 0.8}"
 export MODEL="${MODEL:-Qwen/Qwen3-8B}"
-# Keep run artifacts on scratch; plot reads them back from here.
-export BFCL_RUN_BASE="${BFCL_RUN_BASE:-$ACTIVATION_SPARSITY_OUTPUTS}"
+# Run artifacts (bfcl_run_s*) land inside the repo; plot reads them from here.
+export BFCL_RUN_BASE="${BFCL_RUN_BASE:-$PWD}"
 
 echo "[sweep] model=$MODEL method=$METHOD cats=$CATS sparsities='$SPARSITIES'"
 echo "[sweep] outputs -> $BFCL_RUN_BASE"

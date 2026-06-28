@@ -105,14 +105,15 @@ offline under SLURM. Clone into your own dir under the project space
 (`~/projects/aip-nanditav/sankeert/<you>/`):
 
 ```bash
-source vulcan/env.sh        # project-space caches, uv, two venv paths, SLURM account
+source vulcan/env.sh        # repo venv paths + scratch HF cache, uv, SLURM account
 bash vulcan/setup.sh        # LOGIN node: build both venvs + pre-download Qwen3-8B
 sbatch vulcan/bfcl_sweep.slurm    # one L40S, offline; sweeps + writes the figure
 ```
 
-`vulcan/env.sh` keeps the venvs, HF cache, and `bfcl_run_s*` outputs under
-`$MYPROJ` (default `~/projects/aip-nanditav/sankeert/jhkim`); everything is
-overridable. Sweep knobs:
+`vulcan/env.sh` keeps the venvs (`.venv`, `.venv-bfcl`), the `bfcl_run_s*`
+scores, and the `results/` figure/table/CSV **inside the repo** (project space,
+persistent). Only the re-downloadable HF model cache and the uv toolchain live
+on scratch (`$SCRATCH/jhkim`). Everything is overridable. Sweep knobs:
 
 ```bash
 sbatch --export=ALL,SPARSITIES="0 0.3 0.5 0.7 0.8",CATS=simple_python,irrelevance,METHOD=oracle_gate \
