@@ -1,0 +1,23 @@
+# Research venv (.venv): the per-token FFN masker, the HF OpenAI-compatible
+# server (bfcl_server.py), and the PPL / plotting scripts.
+# Recreate with uv (no system pip on these boxes):
+#   uv venv --python 3.12 "$VENV"
+#   uv pip install --python "$VENV/bin/python" -r requirements-research.txt
+# Pins mirror the box this was developed on (RTX 4090 / Vulcan L40S, CUDA 13).
+# torch pulls the CUDA wheel from PyPI; if your cluster needs a specific CUDA
+# build, install torch separately first (e.g. uv pip install torch==2.12.1
+# --torch-backend=auto) then run this file.
+torch==2.12.1
+transformers==5.12.1
+datasets==5.0.0
+accelerate==1.14.0
+sentencepiece==0.2.1
+protobuf==7.35.1
+matplotlib==3.11.0
+pandas==3.0.3
+tqdm==4.68.3
+numpy==2.5.0
+bitsandbytes==0.49.2
+huggingface-hub==1.20.1
+safetensors==0.8.0
+tokenizers==0.22.2

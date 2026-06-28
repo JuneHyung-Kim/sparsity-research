@@ -26,8 +26,12 @@ VENV="${VENV:-.venv}"
 BFCL_VENV="${BFCL_VENV:-.venv-bfcl}"
 
 # tag like "s00" / "s50" / "s70" for the project-root dir
-TAG="s$(printf '%02d' "$(python3 -c "print(round(float('$SPARSITY')*100))")")"
-ROOT="$PWD/bfcl_run_${TAG}"
+TAG="s$(printf '%02d' "$("$VENV/bin/python" -c "print(round(float('$SPARSITY')*100))")")"
+# Outputs default to the repo dir, but on a cluster point BFCL_RUN_BASE at
+# scratch (home has tight quotas). plot_bfcl.py --runs-dir reads from here.
+BASE="${BFCL_RUN_BASE:-$PWD}"
+mkdir -p "$BASE"
+ROOT="$BASE/bfcl_run_${TAG}"
 SNAP="$("$VENV/bin/python" -c "from huggingface_hub import snapshot_download; print(snapshot_download('$MODEL'))")"
 
 echo "[run_bfcl] sparsity=$SPARSITY method=$METHOD cats=$CATS root=$ROOT"

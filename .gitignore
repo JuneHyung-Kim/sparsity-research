@@ -15,3 +15,6 @@ __pycache__/
 # BFCL (separate env + run artifacts)
 .venv-bfcl/
 bfcl_run*/
+
+# SLURM job logs
+vulcan/logs/

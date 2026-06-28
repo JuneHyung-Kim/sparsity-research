@@ -72,6 +72,55 @@ uv venv --python 3.12 .venv && uv pip install torch transformers datasets accele
 (after `huggingface-cli login`) for the official weights. Weights are never
 modified — only the per-token FFN masker is swapped — so the model loads once.
 
+## BFCL downstream metric (function-calling vs sparsity)
+
+Instead of (or alongside) PPL, sweep BFCL function-calling accuracy vs activation
+sparsity. The same per-token FFN masker is applied to a served HF model
+(`bfcl_server.py`, an OpenAI-compatible `/v1/completions` endpoint); BFCL points
+at it with `--skip-server-setup` so the masker is genuinely in the generation
+path (vLLM/sglang would bypass it). See `results/SUMMARY_bfcl.md`.
+
+Two venvs (the BFCL `[oss]` extra pins `vllm==0.8.5`, which would clobber the
+research torch — so `bfcl-eval` core lives in its own venv):
+
+```bash
+uv venv --python 3.12 .venv      && uv pip install -r requirements-research.txt   # masker + server + plot
+uv venv --python 3.12 .venv-bfcl && uv pip install -r requirements-bfcl.txt        # bfcl CLI only
+```
+
+One sparsity point at a time, then plot the sweep:
+
+```bash
+./run_bfcl.sh 0.0 oracle_gate simple_python,irrelevance   # dense baseline -> bfcl_run_s00/
+./run_bfcl.sh 0.5 oracle_gate simple_python,irrelevance   # -> bfcl_run_s50/
+./run_bfcl.sh 0.8 oracle_gate simple_python,irrelevance   # -> bfcl_run_s80/
+.venv/bin/python plot_bfcl.py --runs-dir . --out results/bfcl_acc_vs_sparsity.png
+```
+
+### On a SLURM cluster (Vulcan / DRAC, L40S 46 GB)
+
+Login node has internet but no GPU; compute nodes have GPUs but no internet, so
+the venvs and the model are prepared on the login node (onto scratch) and the
+sweep runs offline under SLURM. After `git clone`:
+
+```bash
+source vulcan/env.sh        # scratch caches, uv, two venv paths, SLURM account
+bash vulcan/setup.sh        # LOGIN node: build both venvs + pre-download Qwen3-8B
+sbatch vulcan/bfcl_sweep.slurm    # one L40S, offline; sweeps + writes the figure
+```
+
+`vulcan/env.sh` keeps the venvs, HF cache, and `bfcl_run_s*` outputs on
+`$SCRATCH` (home has tight quotas) and is fully overridable. Sweep knobs:
+
+```bash
+sbatch --export=ALL,SPARSITIES="0 0.3 0.5 0.7 0.8",CATS=simple_python,irrelevance,METHOD=oracle_gate \
+       vulcan/bfcl_sweep.slurm
+```
+
+`--time` defaults to fit the 3h partition; for a longer sweep raise both the
+partition (`#SBATCH --partition=gpubase_bygpu_b2`) and `--time`. The figure
+lands at `results/bfcl_acc_vs_sparsity.png` (+ `.csv`).
+
 ## How the masking works (`src/actsparse.py`)
 
 `install_sparse_mlps(model)` replaces every block's `.mlp` with a `SparseMLP`

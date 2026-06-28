@@ -1,0 +1,13 @@
+# BFCL harness venv (.venv-bfcl): the `bfcl` CLI only.
+# Recreate with uv:
+#   uv venv --python 3.12 "$BFCL_VENV"
+#   uv pip install --python "$BFCL_VENV/bin/python" -r requirements-bfcl.txt
+#
+# IMPORTANT: install the CORE package only. Do NOT install the `[oss]` /
+# vllm/sglang extras — bfcl-eval[oss] pins vllm==0.8.5 which drags in
+# torch 2.6 / CUDA 12.4 and would clobber the research venv's torch 2.12.
+# We never use vLLM here: the masker lives in the HF model served by
+# bfcl_server.py, and BFCL talks to it over HTTP with --skip-server-setup.
+# Core bfcl-eval is light and conflict-free; AST categories (simple_python,
+# irrelevance, ...) ship their data in the package — no download needed.
+bfcl-eval==2026.3.23
