@@ -44,13 +44,14 @@ class SparseMLP(nn.Module):
 
     def forward(self, x):
         m = self.mlp
-        a = m.act_fn(m.gate_proj(x)) * m.up_proj(x)     # [..., intermediate]
+        g = m.act_fn(m.gate_proj(x))                    # silu(gate): nonlinear gating
+        a = g * m.up_proj(x)                            # [..., intermediate] -> down_proj
         rec = self.ctrl.get("recorder")
         if rec is not None:
             rec(self, a)
         msk = self.ctrl.get("masker")
         if msk is not None:
-            a = msk(a, self.col_norm)
+            a = msk(a, self.col_norm, g)
         return m.down_proj(a)
 
 
@@ -84,7 +85,7 @@ def make_oracle_masker(sparsity, contribution_aware):
       contribution_aware=False -> rank by |a_i|              (gate*up magnitude)
       contribution_aware=True  -> rank by |a_i| * ||down_i|| (true output norm)
     """
-    def masker(a, col_norm):
+    def masker(a, col_norm, gate):
         n_drop = int(round(sparsity * a.shape[-1]))
         score = a.abs().float()
         if contribution_aware:
@@ -93,9 +94,22 @@ def make_oracle_masker(sparsity, contribution_aware):
     return masker
 
 
+def make_oracle_gateonly_masker(sparsity):
+    """Rank neurons by |silu(gate_proj(x))| ALONE — the nonlinear gating signal,
+    *before* up_proj. Unlike the |gate*up| / contribution oracles this score needs
+    only the gate branch, so the kept set can be chosen before up_proj/down_proj
+    run: it is the ceiling for a realizable gate-magnitude predictor (drops two of
+    three matmuls for skipped neurons). The gap to oracle_gate measures how much
+    the up_proj value carries beyond the gate for picking which neurons matter."""
+    def masker(a, col_norm, gate):
+        n_drop = int(round(sparsity * a.shape[-1]))
+        return _drop_smallest(a, gate.abs().float(), n_drop)
+    return masker
+
+
 def make_random_masker(sparsity, generator=None):
     """Lower bound: drop a random per-token subset."""
-    def masker(a, col_norm):
+    def masker(a, col_norm, gate):
         n_drop = int(round(sparsity * a.shape[-1]))
         if n_drop <= 0:
             return a
@@ -111,12 +125,14 @@ def build_masker(method, sparsity, device, seed=0):
         return make_random_masker(sparsity, g)
     if method == "oracle_gate":
         return make_oracle_masker(sparsity, contribution_aware=False)
+    if method == "oracle_gateonly":
+        return make_oracle_gateonly_masker(sparsity)
     if method == "oracle_contrib":
         return make_oracle_masker(sparsity, contribution_aware=True)
     raise ValueError(f"unknown method '{method}'")
 
 
-METHODS = ["random", "oracle_gate", "oracle_contrib"]
+METHODS = ["random", "oracle_gate", "oracle_gateonly", "oracle_contrib"]
 
 
 class MassRecorder:

@@ -43,7 +43,10 @@ def main():
 
     dtype = getattr(torch, args.dtype)
     print(f"[load] {args.model} ({args.dtype})")
-    tok = AutoTokenizer.from_pretrained(args.model, use_fast=False)
+    try:
+        tok = AutoTokenizer.from_pretrained(args.model, use_fast=False)
+    except Exception:  # Llama-3+ ships no slow (sentencepiece) tokenizer
+        tok = AutoTokenizer.from_pretrained(args.model, use_fast=True)
     model = AutoModelForCausalLM.from_pretrained(
         args.model, dtype=dtype, low_cpu_mem_usage=True).to(args.device)
     model.eval()
