@@ -113,7 +113,7 @@ sbatch vulcan/bfcl_sweep.slurm    # one L40S, offline; sweeps + writes the figur
 `vulcan/env.sh` keeps the venvs (`.venv`, `.venv-bfcl`), the `bfcl_run_s*`
 scores, and the `results/` figure/table/CSV **inside the repo** (project space,
 persistent). Only the re-downloadable HF model cache and the uv toolchain live
-on scratch (`$SCRATCH/jhkim`). Everything is overridable. Sweep knobs:
+on scratch (`~/scratch/jhkim`). Everything is overridable. Sweep knobs:
 
 ```bash
 sbatch --export=ALL,SPARSITIES="0 0.3 0.5 0.7 0.8",CATS=simple_python,irrelevance,METHOD=oracle_gate \

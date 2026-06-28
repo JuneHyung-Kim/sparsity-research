@@ -11,7 +11,8 @@ export VENV="${VENV:-$REPO_ROOT/.venv}"             # masker + HF server + plot
 export BFCL_VENV="${BFCL_VENV:-$REPO_ROOT/.venv-bfcl}"   # the bfcl CLI
 
 # --- scratch: data + tooling (re-downloadable / re-installable) ---
-export SCRATCH="${SCRATCH:-/scratch/$USER}"
+# ~/scratch is the DRAC scratch symlink; keep our data under ~/scratch/jhkim.
+export SCRATCH="${SCRATCH:-$HOME/scratch}"
 SCRATCH_DATA="${SCRATCH_DATA:-$SCRATCH/jhkim}"
 export TMPDIR="${TMPDIR:-$SCRATCH_DATA/tmp}"
 # HF model cache, shared between login (download) and compute (offline read).
