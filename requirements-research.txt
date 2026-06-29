@@ -1,5 +1,5 @@
-# Research venv (.venv): the per-token FFN masker, the HF OpenAI-compatible
-# server (bfcl_server.py), and the PPL / plotting scripts.
+# Research venv (.venv): the per-token FFN masker (src/actsparse.py), the HF
+# OpenAI-compatible server (bfcl_server.py), and the sweep plot (plot_bfcl.py).
 # Recreate with uv (no system pip on these boxes):
 #   uv venv --python 3.12 "$VENV"
 #   uv pip install --python "$VENV/bin/python" -r requirements-research.txt
@@ -9,15 +9,12 @@
 # --torch-backend=auto) then run this file.
 torch==2.12.1
 transformers==5.12.1
-datasets==5.0.0
 accelerate==1.14.0
 sentencepiece==0.2.1
 protobuf==7.35.1
 matplotlib==3.11.0
-pandas==3.0.3
 tqdm==4.68.3
 numpy==2.5.0
-bitsandbytes==0.49.2
 huggingface-hub==1.20.1
 safetensors==0.8.0
 tokenizers==0.22.2

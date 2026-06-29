@@ -19,7 +19,7 @@ cd "$(dirname "$0")"
 
 SPARSITY="${1:?usage: run_bfcl.sh <sparsity> [method] [categories]}"
 METHOD="${2:-oracle_gate}"
-CATS="${3:-simple_python,irrelevance}"
+CATS="${3:-single_turn,multi_turn}"
 PORT="${PORT:-1053}"
 MODEL="${MODEL:-Qwen/Qwen3-8B}"
 VENV="${VENV:-.venv}"
