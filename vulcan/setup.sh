@@ -29,6 +29,18 @@ echo "[setup] bfcl venv -> $BFCL_VENV (core only, no vllm)"
 uv venv --python 3.12 "$BFCL_VENV"
 uv pip install --python "$BFCL_VENV/bin/python" -r requirements-bfcl.txt
 
+echo "[setup] tau2 venv -> $TAU2_VENV (clone upstream + editable install)"
+# Clone the tau2-bench upstream (holds the package AND the domain data). Pin a
+# tag with --branch <tag> for strict reproducibility; default branch otherwise.
+if [ ! -d "$TAU2_REPO/.git" ]; then
+    git clone --depth 1 https://github.com/sierra-research/tau2-bench.git "$TAU2_REPO"
+fi
+uv venv --python 3.12 "$TAU2_VENV"
+# tau2 is a CLI that only talks to LLM endpoints over HTTP (no torch), so it
+# coexists with the research venv without clobbering it. Editable so the `tau2`
+# entry point resolves the in-repo data/ (TAU2_DATA_DIR also points there).
+uv pip install --python "$TAU2_VENV/bin/python" -e "$TAU2_REPO"
+
 echo "[setup] pre-downloading $MODEL into $HF_HOME"
 "$VENV/bin/python" - "$MODEL" <<'PY'
 import sys
@@ -37,5 +49,6 @@ print(snapshot_download(sys.argv[1]))
 PY
 
 echo
-echo "[setup] done. Submit the sweep with:"
-echo "  sbatch vulcan/bfcl_sweep.slurm"
+echo "[setup] done. Submit a sweep with:"
+echo "  sbatch vulcan/bfcl_sweep.slurm     # function-calling accuracy (BFCL)"
+echo "  sbatch vulcan/tau2_sweep.slurm     # agentic tool+user (tau2-bench)"

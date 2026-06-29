@@ -9,6 +9,9 @@
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export VENV="${VENV:-$REPO_ROOT/.venv}"             # masker + HF server + plot
 export BFCL_VENV="${BFCL_VENV:-$REPO_ROOT/.venv-bfcl}"   # the bfcl CLI
+export TAU2_VENV="${TAU2_VENV:-$REPO_ROOT/.venv-tau2}"   # the tau2 CLI
+export TAU2_REPO="${TAU2_REPO:-$REPO_ROOT/tau2-bench}"   # cloned upstream (pkg + data)
+export TAU2_DATA_DIR="${TAU2_DATA_DIR:-$TAU2_REPO/data}" # tau2 domains + simulations out
 
 # --- scratch: data + tooling (re-downloadable / re-installable) ---
 # ~/scratch is the DRAC scratch symlink; keep our data under ~/scratch/jhkim.

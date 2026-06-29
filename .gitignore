@@ -16,5 +16,10 @@ __pycache__/
 .venv-bfcl/
 bfcl_run*/
 
+# tau2-bench (separate env + cloned upstream + run artifacts)
+.venv-tau2/
+tau2-bench/
+tau2_run*/
+
 # SLURM job logs
 vulcan/logs/

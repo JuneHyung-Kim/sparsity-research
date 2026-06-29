@@ -1,8 +1,14 @@
-# BFCL under contextual activation sparsity
+# Downstream benchmarks under contextual activation sparsity
 
 Measure how **token-dependent FFN activation sparsity** affects a model's
-**function-calling** ability, using the Berkeley Function Calling Leaderboard
-(BFCL V4) as the downstream metric instead of perplexity.
+downstream ability, instead of perplexity. Two downstream metrics share the same
+masker:
+
+- **BFCL V4** (Berkeley Function Calling Leaderboard) — single-shot
+  **function-calling** accuracy. `bfcl_server.py` + `run_bfcl.sh`.
+- **tau2-bench** — **agentic** tool-use where the model converses with a
+  simulated user and acts against a domain DB over many turns (retail / airline /
+  telecom), scored by `pass^k` task completion. `tau2_server.py` + `run_tau2.sh`.
 
 This is *contextual activation sparsity* (à la Deja Vu / PowerInfer), **not**
 weight pruning: for each token only a subset of FFN neurons meaningfully
@@ -69,6 +75,48 @@ sweep, collect them into a figure + table + CSV:
 scored. `web_search` needs a paid SerpAPI key; `memory` needs agentic backends;
 `format_sensitivity` is non-scoring — all three are excluded by default.
 
+## tau2-bench (agentic tool + user)
+
+tau2-bench talks the OpenAI **chat + tools** contract (via LiteLLM), so the
+masker has to be served behind a chat endpoint that renders the prompt and parses
+tool calls itself — `tau2_server.py` does this (Qwen3 chat template with `tools=`,
+`<tool_call>` → OpenAI `tool_calls`, `<think>` stripped). It also serves **two
+roles from one model**: the **agent** (the policy under test, masker applied) and
+the **user simulator** (part of the environment, always dense), routed by the
+request's model name. The user-sim is the same dense Qwen3-8B held fixed across a
+sweep, so the only thing that varies between sparsity points is the agent's
+masker. The benchmark environment (domain tools + DB) runs locally — no API keys.
+
+Setup adds a third venv with the tau2 CLI; tau2's upstream repo is cloned because
+it holds both the package and the domain data (`TAU2_DATA_DIR`):
+
+```bash
+git clone https://github.com/sierra-research/tau2-bench    # holds pkg + data/
+uv venv --python 3.12 .venv-tau2 && uv pip install -e ./tau2-bench
+```
+
+Run one sparsity point on a domain (serves the model for both roles, runs the
+tasks, scores `pass^k`/`avg_reward`, tears down):
+
+```bash
+./run_tau2.sh <sparsity> [method] [domain]
+# e.g. dense retail baseline:
+./run_tau2.sh 0.0 oracle_gate retail
+```
+
+A point writes `tau2_run_s<NN>/<domain>.json` (the compact metrics record). Knobs
+mirror `run_bfcl.sh`: `TRIALS` (raise for `pass^k`), `NTASKS` (subset),
+`CONC` (concurrency / server batch), `THINK`, `FRESH=1` (wipe stale sims). After
+a sweep, collect into a figure + table + CSV:
+
+```bash
+.venv/bin/python plot_tau2.py --runs-dir .   # -> results/tau2_passk_vs_sparsity.{png,md,csv}
+```
+
+`retail` (114 tasks) has the most headroom for an 8B agent; `airline` (50) and
+`telecom` are harder. tau2 logs a cosmetic `model isn't mapped` ERROR per call
+(LiteLLM cost lookup for our local model id) — harmless; the run still scores.
+
 ## On a SLURM cluster (Vulcan / DRAC, L40S 46 GB)
 
 Login node has internet but no GPU; compute nodes have GPUs but no internet, so
@@ -78,8 +126,9 @@ offline under SLURM. Clone into your own dir under the project space
 
 ```bash
 source vulcan/env.sh        # repo venv paths + scratch HF cache, uv, SLURM account
-bash vulcan/setup.sh        # LOGIN node: build both venvs + pre-download Qwen3-8B
-sbatch vulcan/bfcl_sweep.slurm   # one L40S, offline; full sweep -> figure/table/CSV
+bash vulcan/setup.sh        # LOGIN node: build the venvs (+ clone tau2) + Qwen3-8B
+sbatch vulcan/bfcl_sweep.slurm   # one L40S, offline; function-calling sweep
+sbatch vulcan/tau2_sweep.slurm   # one L40S, offline; agentic tool+user sweep
 ```
 
 `vulcan/env.sh` keeps the venvs (`.venv`, `.venv-bfcl`), the `bfcl_run_s*`
@@ -98,11 +147,18 @@ sbatch --export=ALL,SPARSITIES="0 0.5 0.8",CATS=single_turn vulcan/bfcl_sweep.sl
 ## Layout
 
 ```
+src/actsparse.py         # SparseMLP wrapper + per-token maskers (shared)
+
 bfcl_server.py           # OpenAI /v1/completions server with the masker installed
 run_bfcl.sh              # serve at one sparsity, then bfcl generate + evaluate
 plot_bfcl.py             # bfcl_run_s*/score -> accuracy-vs-sparsity figure/table/CSV
-src/actsparse.py         # SparseMLP wrapper + per-token maskers
-requirements-*.txt       # pinned deps for the two venvs
-vulcan/                  # env.sh, setup.sh, bfcl_sweep.slurm (SLURM cluster)
+
+tau2_server.py           # OpenAI /v1/chat/completions (tools) server; agent+user roles
+run_tau2.sh              # serve at one sparsity, then tau2 run + score (pass^k)
+tau2_score.py            # tau2 results.json -> compact metrics record (runs in tau2 venv)
+plot_tau2.py             # tau2_run_s*/<domain>.json -> pass^k-vs-sparsity figure/table/CSV
+
+requirements-*.txt       # pinned deps (research + bfcl venvs; tau2 deps come from its repo)
+vulcan/                  # env.sh, setup.sh, bfcl_sweep.slurm, tau2_sweep.slurm (SLURM)
 results/SUMMARY_bfcl.md  # method notes + result writeup
 ```
