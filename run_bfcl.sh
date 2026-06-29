@@ -51,6 +51,14 @@ SNAP="$("$VENV/bin/python" -c "from huggingface_hub import snapshot_download; pr
 
 echo "[run_bfcl] model=$MODEL fc=$FC_MODEL sparsity=$SPARSITY method=$METHOD cats=$CATS think=$THINK batch=$BATCH max_new=$MAX_NEW root=$ROOT"
 
+# BFCL skips generation when result files already exist (its resume feature).
+# That silently re-scores stale results after a code change, so FRESH=1 wipes
+# this sparsity's prior generations/scores to force a clean re-run.
+if [ "${FRESH:-0}" != "0" ]; then
+    echo "[run_bfcl] FRESH=1 -> clearing $ROOT/{result,score}"
+    rm -rf "$ROOT/result" "$ROOT/score"
+fi
+
 # Reduce CUDA fragmentation OOMs — multi_turn/thinking grow the KV cache a lot.
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
