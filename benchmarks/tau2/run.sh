@@ -63,11 +63,19 @@ if [ "${FRESH:-0}" != "0" ]; then
     rm -rf "$SIM_DIR"
 fi
 
-# llm-args: point litellm's openai provider at our local server (both roles).
+# Point litellm's openai provider at our local server. We set OPENAI_API_BASE as
+# the GLOBAL default (not just per-call --*-llm-args), because litellm's internal
+# num_retries path can drop a per-request api_base and fall back to the real
+# api.openai.com -> AuthenticationError("Incorrect API key: local"). With the env
+# base set, every openai/* call (first try AND retries) targets our server.
 API_BASE="http://localhost:$PORT/v1"
+export OPENAI_API_BASE="$API_BASE"
+export OPENAI_API_KEY="${OPENAI_API_KEY:-local}"
 AGENT_ARGS="{\"api_base\": \"$API_BASE\", \"api_key\": \"local\", \"temperature\": 0.0}"
 USER_ARGS="{\"api_base\": \"$API_BASE\", \"api_key\": \"local\", \"temperature\": 0.0}"
-export OPENAI_API_KEY="${OPENAI_API_KEY:-local}"   # belt-and-suspenders for litellm
+# Pre-register these model ids with litellm at zero cost (via _tau2_cli.py) so its
+# cost lookup doesn't log a 'model isn't mapped' ERROR per call for our endpoint.
+export TAU2_LOCAL_MODELS="$AGENT_NAME,$USER_NAME"
 
 NTASKS_FLAG=""
 [ -n "${NTASKS:-}" ] && NTASKS_FLAG="--num-tasks $NTASKS"
@@ -92,7 +100,9 @@ for _ in $(seq 1 120); do
 done
 
 # --- run the benchmark (tau2 drives both roles against our server) ---
-"$TAU2_VENV/bin/tau2" run \
+# Invoke tau2 via _tau2_cli.py (registers our local model ids with litellm first,
+# then delegates to tau2's CLI) instead of the bare `tau2` entry point.
+"$TAU2_VENV/bin/python" benchmarks/tau2/_tau2_cli.py run \
     --domain "$DOMAIN" \
     --agent-llm "openai/$AGENT_NAME" --agent-llm-args "$AGENT_ARGS" \
     --user-llm  "openai/$USER_NAME"  --user-llm-args  "$USER_ARGS" \
