@@ -64,6 +64,7 @@ fi
 # "<category>_<i>", contiguous from 0) and adds --run-ids. Use explicit category
 # names in CATS (not group aliases like single_turn) so the ids resolve.
 RUN_IDS_FLAG=""
+PARTIAL_FLAG=""
 if [ -n "${NCASES:-}" ]; then
     mkdir -p "$ROOT"
     "$VENV/bin/python" - "$ROOT" "$CATS" "$NCASES" <<'PY'
@@ -73,6 +74,8 @@ ids = {c: [f"{c}_{i}" for i in range(n)] for c in cats}
 json.dump(ids, open(os.path.join(root, "test_case_ids_to_generate.json"), "w"), indent=2)
 PY
     RUN_IDS_FLAG="--run-ids"
+    # evaluate refuses a partial result set unless told it's intentional.
+    PARTIAL_FLAG="--partial-eval"
     echo "[run_bfcl] NCASES=$NCASES -> first $NCASES ids/category via --run-ids"
 fi
 
@@ -97,6 +100,6 @@ export BFCL_PROJECT_ROOT="$ROOT"
 export LOCAL_SERVER_PORT="$PORT"
 "$BFCL_VENV/bin/bfcl" generate --model "$FC_MODEL" --test-category "$CATS" \
     --skip-server-setup --local-model-path "$SNAP" --num-threads "$NUM_THREADS" $RUN_IDS_FLAG
-"$BFCL_VENV/bin/bfcl" evaluate --model "$FC_MODEL" --test-category "$CATS"
+"$BFCL_VENV/bin/bfcl" evaluate --model "$FC_MODEL" --test-category "$CATS" $PARTIAL_FLAG
 
 echo "[run_bfcl] scores -> $ROOT/score/"
