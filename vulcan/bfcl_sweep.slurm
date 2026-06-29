@@ -47,4 +47,7 @@ done
     --out results/bfcl_acc_vs_sparsity.png \
     --csv results/bfcl_acc_vs_sparsity.csv
 
-echo "[sweep] done -> results/bfcl_acc_vs_sparsity.png"
+# Remove BFCL's transient HF lock dirs (pure cruft; scores/results are kept).
+find "$BFCL_RUN_BASE"/bfcl_run_s* -type d -name .file_locks -exec rm -rf {} + 2>/dev/null || true
+
+echo "[sweep] done. results -> results/bfcl_acc_vs_sparsity.{png,md,csv}"
