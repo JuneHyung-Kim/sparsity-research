@@ -23,6 +23,7 @@ Run BFCL with a matching --num-threads so enough requests are in flight.
 import argparse
 import json
 import queue
+import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -40,6 +41,12 @@ ARGS = None
 REQ_Q = "queue.Queue of _Req"   # set in main()
 EMPTY_THINK = "<think>\n\n</think>\n\n"   # Qwen3 non-thinking trigger
 STOPS = ("<|im_end|>", "<|endoftext|>")
+# A leading <think>...</think> block. BFCL's OSS handler appends the raw
+# completion to the chat history every step (up to 20 per turn), so if we leave
+# the reasoning in, multi_turn context explodes and the GPU OOMs. Qwen's own
+# multi-turn convention drops prior-turn reasoning; we strip it here so history
+# carries only the answer/tool_call. The model still reasons during generation.
+THINK_RE = re.compile(r"^\s*<think>.*?</think>\s*", re.S)
 
 
 class _Req:
@@ -100,6 +107,8 @@ def _run_group(reqs):
             j = text.find(stop)
             if j != -1:
                 text = text[:j]
+        if ARGS.think:                         # drop reasoning so it can't pile
+            text = THINK_RE.sub("", text, count=1)   # up in multi_turn history
         r.text = text
         r.n_in = int(attn[i].sum())            # this row's real prompt tokens
         r.n_out = int((ids != pad_id).sum())   # generated tokens (approx)
