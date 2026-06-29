@@ -24,6 +24,11 @@ PORT="${PORT:-1053}"
 MODEL="${MODEL:-Qwen/Qwen3-8B}"
 VENV="${VENV:-.venv}"
 BFCL_VENV="${BFCL_VENV:-.venv-bfcl}"
+# Throughput: the server micro-batches concurrent requests, so BFCL must keep
+# many in flight. NUM_THREADS (BFCL's parallel requests) should ~match the
+# server's --batch; lower BATCH if the GPU OOMs on long-prompt batches.
+NUM_THREADS="${NUM_THREADS:-24}"
+BATCH="${BATCH:-24}"
 
 # tag like "s00" / "s50" / "s70" for the project-root dir
 TAG="s$(printf '%02d' "$("$VENV/bin/python" -c "print(round(float('$SPARSITY')*100))")")"
@@ -38,7 +43,7 @@ echo "[run_bfcl] sparsity=$SPARSITY method=$METHOD cats=$CATS root=$ROOT"
 
 # --- start server, wait for readiness, ensure cleanup ---
 "$VENV/bin/python" bfcl_server.py --model "$MODEL" --port "$PORT" \
-    --method "$METHOD" --sparsity "$SPARSITY" &
+    --method "$METHOD" --sparsity "$SPARSITY" --batch "$BATCH" &
 SERVER_PID=$!
 trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
 
@@ -52,7 +57,7 @@ done
 export BFCL_PROJECT_ROOT="$ROOT"
 export LOCAL_SERVER_PORT="$PORT"
 "$BFCL_VENV/bin/bfcl" generate --model Qwen/Qwen3-8B-FC --test-category "$CATS" \
-    --skip-server-setup --local-model-path "$SNAP" --num-threads 2
+    --skip-server-setup --local-model-path "$SNAP" --num-threads "$NUM_THREADS"
 "$BFCL_VENV/bin/bfcl" evaluate --model Qwen/Qwen3-8B-FC --test-category "$CATS"
 
 echo "[run_bfcl] scores -> $ROOT/score/"

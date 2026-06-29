@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=48G
 #SBATCH --partition=gpubase_bygpu_b5
-#SBATCH --time=2-00:00:00
+#SBATCH --time=08:00:00
 #SBATCH --output=vulcan/logs/%x-%j.out
 #
 # BFCL accuracy-vs-sparsity sweep on one L40S, fully offline.
@@ -17,10 +17,12 @@
 #          vulcan/bfcl_sweep.slurm
 #
 # Defaults run every key-free function-calling category (single_turn = non_live
-# + live, plus multi_turn) across the full sparsity sweep — a long, multi-hour
-# job, hence the 7-day partition (b5) and 2-day wall clock. web_search (needs a
-# SerpAPI key), memory (needs agentic backends), and format_sensitivity
-# (non-scoring) are excluded. Trim CATS/SPARSITIES for a quick run.
+# + live, plus multi_turn) across the full sparsity sweep. The server
+# micro-batches requests so this is hours, not days; the 8h wall clock on the
+# 7-day partition (b5) leaves ample margin. web_search (needs a SerpAPI key),
+# memory (needs agentic backends), and format_sensitivity (non-scoring) are
+# excluded. Trim CATS/SPARSITIES for a quick run; lower BATCH/NUM_THREADS via
+# --export if the GPU OOMs.
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 source vulcan/env.sh
