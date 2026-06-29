@@ -46,11 +46,11 @@ echo "[sweep] outputs -> $BFCL_RUN_BASE"
 # are written per (sparsity, category) as they complete.
 for s in $SPARSITIES; do
     echo "===== sparsity=$s ====="
-    ./run_bfcl.sh "$s" "$METHOD" "$CATS" || echo "[sweep] WARN: sparsity=$s failed; continuing"
+    ./benchmarks/bfcl/run.sh "$s" "$METHOD" "$CATS" || echo "[sweep] WARN: sparsity=$s failed; continuing"
 done
 
 # Gather scores across the sweep into a figure + CSV (committed under results/).
-"$VENV/bin/python" plot_bfcl.py \
+"$VENV/bin/python" benchmarks/bfcl/plot.py \
     --runs-dir "$BFCL_RUN_BASE" \
     --out results/bfcl_acc_vs_sparsity.png \
     --csv results/bfcl_acc_vs_sparsity.csv

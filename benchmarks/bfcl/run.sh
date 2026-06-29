@@ -2,25 +2,26 @@
 # Run BFCL on Qwen3-8B with a given activation-sparsity setting, end to end.
 #
 # Serves the HF model (with the per-token FFN masker from src/actsparse.py) via
-# bfcl_server.py, points BFCL at it with --skip-server-setup, generates + scores
-# one or more categories, then tears the server down. Results/scores land in a
-# per-sparsity project root so dense and sparse runs don't clobber each other.
+# benchmarks/bfcl/server.py, points BFCL at it with --skip-server-setup, generates
+# + scores one or more categories, then tears the server down. Results/scores land
+# in a per-sparsity project root so dense and sparse runs don't clobber each other.
 #
 # Usage:
-#   ./run_bfcl.sh <sparsity> [method] [categories]
+#   ./benchmarks/bfcl/run.sh <sparsity> [method] [categories]
 # Examples:
-#   ./run_bfcl.sh 0.0                              # dense baseline
-#   ./run_bfcl.sh 0.5 oracle_gate simple_python,irrelevance
-#   ./run_bfcl.sh 0.7 oracle_contrib non_live
+#   ./benchmarks/bfcl/run.sh 0.0                              # dense baseline
+#   ./benchmarks/bfcl/run.sh 0.5 oracle_gate simple_python,irrelevance
+#   ./benchmarks/bfcl/run.sh 0.7 oracle_contrib non_live
 #
 # Env knobs:
 #   PORT (1053), MODEL (Qwen/Qwen3-8B), FC_MODEL (=${MODEL}-FC, the BFCL handler
 #   id), VENV (.venv), BFCL_VENV (.venv-bfcl), NUM_THREADS/BATCH (throughput),
 #   THINK (1 = enable Qwen3 reasoning; needed for multi_turn), MAX_NEW (1024).
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."          # repo root (this script lives in benchmarks/bfcl/)
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"   # so server.py finds src.actsparse
 
-SPARSITY="${1:?usage: run_bfcl.sh <sparsity> [method] [categories]}"
+SPARSITY="${1:?usage: run.sh <sparsity> [method] [categories]}"
 METHOD="${2:-oracle_gate}"
 CATS="${3:-single_turn,multi_turn}"
 PORT="${PORT:-1053}"
@@ -43,7 +44,7 @@ THINK_FLAG=""
 # tag like "s00" / "s50" / "s70" for the project-root dir
 TAG="s$(printf '%02d' "$("$VENV/bin/python" -c "print(round(float('$SPARSITY')*100))")")"
 # Outputs default to the repo dir, but on a cluster point BFCL_RUN_BASE at
-# scratch (home has tight quotas). plot_bfcl.py --runs-dir reads from here.
+# scratch (home has tight quotas). benchmarks/bfcl/plot.py --runs-dir reads here.
 BASE="${BFCL_RUN_BASE:-$PWD}"
 mkdir -p "$BASE"
 ROOT="$BASE/bfcl_run_${TAG}"
@@ -83,7 +84,7 @@ fi
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 # --- start server, wait for readiness, ensure cleanup ---
-"$VENV/bin/python" bfcl_server.py --model "$MODEL" --served-name "$FC_MODEL" \
+"$VENV/bin/python" benchmarks/bfcl/server.py --model "$MODEL" --served-name "$FC_MODEL" \
     --port "$PORT" --method "$METHOD" --sparsity "$SPARSITY" \
     --batch "$BATCH" --max-new "$MAX_NEW" $THINK_FLAG &
 SERVER_PID=$!

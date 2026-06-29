@@ -2,18 +2,18 @@
 # Run tau2-bench on Qwen3-8B with a given activation-sparsity setting, end to end.
 #
 # Serves the HF model (per-token FFN masker from src/actsparse.py) via
-# tau2_server.py as an OpenAI chat+tools endpoint, points tau2-bench at it for
-# BOTH roles -- the AGENT (masked, the policy under test) and the USER simulator
-# (dense, part of the environment) -- runs one domain, scores pass^k / avg_reward,
-# then tears the server down. Each sparsity point writes to its own dir so dense
-# and sparse runs don't clobber each other.
+# benchmarks/tau2/server.py as an OpenAI chat+tools endpoint, points tau2-bench at
+# it for BOTH roles -- the AGENT (masked, the policy under test) and the USER
+# simulator (dense, part of the environment) -- runs one domain, scores pass^k /
+# avg_reward, then tears the server down. Each sparsity point writes to its own dir
+# so dense and sparse runs don't clobber each other.
 #
 # Usage:
-#   ./run_tau2.sh <sparsity> [method] [domain]
+#   ./benchmarks/tau2/run.sh <sparsity> [method] [domain]
 # Examples:
-#   ./run_tau2.sh 0.0                       # dense baseline, retail
-#   ./run_tau2.sh 0.5 oracle_gate retail
-#   ./run_tau2.sh 0.7 oracle_gate airline
+#   ./benchmarks/tau2/run.sh 0.0                       # dense baseline, retail
+#   ./benchmarks/tau2/run.sh 0.5 oracle_gate retail
+#   ./benchmarks/tau2/run.sh 0.7 oracle_gate airline
 #
 # Env knobs:
 #   PORT (1055), MODEL (Qwen/Qwen3-8B), VENV (.venv), TAU2_VENV (.venv-tau2),
@@ -22,9 +22,10 @@
 #   THINK (0; 1 enables Qwen3 reasoning), MAX_NEW (1024), SEED (300),
 #   TAU2_RUN_BASE (output base; defaults to repo dir).
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."          # repo root (this script lives in benchmarks/tau2/)
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"   # so server.py finds src.actsparse
 
-SPARSITY="${1:?usage: run_tau2.sh <sparsity> [method] [domain]}"
+SPARSITY="${1:?usage: run.sh <sparsity> [method] [domain]}"
 METHOD="${2:-oracle_gate}"
 DOMAIN="${3:-retail}"
 PORT="${PORT:-1055}"
@@ -77,7 +78,7 @@ echo "[run_tau2] model=$MODEL sparsity=$SPARSITY method=$METHOD domain=$DOMAIN t
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 # --- start server, wait for readiness, ensure cleanup ---
-"$VENV/bin/python" tau2_server.py --model "$MODEL" \
+"$VENV/bin/python" benchmarks/tau2/server.py --model "$MODEL" \
     --served-name "$AGENT_NAME" --user-served-name "$USER_NAME" \
     --port "$PORT" --method "$METHOD" --sparsity "$SPARSITY" \
     --batch "$CONC" --max-new "$MAX_NEW" $THINK_FLAG &
@@ -99,7 +100,7 @@ done
     --save-to "$SAVE_TO" --auto-resume $NTASKS_FLAG
 
 # --- score: results.json -> compact metrics (pass^k, avg_reward) in our tree ---
-"$TAU2_VENV/bin/python" tau2_score.py "$RESULTS_JSON" \
+"$TAU2_VENV/bin/python" benchmarks/tau2/score.py "$RESULTS_JSON" \
     --domain "$DOMAIN" --sparsity "$SPARSITY" --method "$METHOD" \
     --out "$ROOT/${DOMAIN}.json"
 

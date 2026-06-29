@@ -1,16 +1,17 @@
 """Collect tau2-bench metrics across a sparsity sweep and plot them vs sparsity.
 
-The tau2 analogue of plot_bfcl.py. run_tau2.sh writes one dir per sparsity point,
-named tau2_run_s00 / tau2_run_s50 / ... Each holds one compact record per domain
+The tau2 analogue of benchmarks/bfcl/plot.py. benchmarks/tau2/run.sh writes one
+dir per sparsity point, named tau2_run_s00 / tau2_run_s50 / ... Each holds one
+compact record per domain
     tau2_run_s<NN>/<domain>.json
-written by tau2_score.py: {domain, sparsity, method, avg_reward, pass_hat_1, ...}.
+written by score.py: {domain, sparsity, method, avg_reward, pass_hat_1, ...}.
 We glob those and draw one line per domain (default metric: pass^1, the
 task-completion reliability that is tau2's headline number).
 
 Reads only JSON, so it runs in the research .venv (no tau2 import needed).
 
 Usage:
-    python plot_tau2.py --runs-dir . \
+    python benchmarks/tau2/plot.py --runs-dir . \
         --out results/tau2_passk_vs_sparsity.png \
         --csv results/tau2_passk_vs_sparsity.csv
 """

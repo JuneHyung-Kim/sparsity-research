@@ -3,7 +3,7 @@
 Runs in the tau2 venv (.venv-tau2) -- it imports tau2 to reuse the official
 metric computation (pass^k via math.comb on per-task trial successes, plus
 avg_reward). Writes a small JSON tagged with the sparsity/method/domain so a
-sweep of these files can be collected into a curve by plot_tau2.py.
+sweep of these files can be collected into a curve by benchmarks/tau2/plot.py.
 """
 import argparse
 import json

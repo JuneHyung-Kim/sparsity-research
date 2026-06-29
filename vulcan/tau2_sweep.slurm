@@ -10,7 +10,7 @@
 # tau2-bench pass^k-vs-sparsity sweep on one L40S, fully offline.
 # Run vulcan/setup.sh on the login node FIRST (venvs + tau2 clone + model
 # download). tau2 drives BOTH the agent (masked) and the user simulator (dense)
-# against our local tau2_server.py, so no external API keys are needed.
+# against our local benchmarks/tau2/server.py, so no external API keys are needed.
 #
 # Submit:
 #   sbatch vulcan/tau2_sweep.slurm
@@ -48,13 +48,13 @@ echo "[sweep] outputs -> $TAU2_RUN_BASE"
 for dom in $DOMAINS; do
     for s in $SPARSITIES; do
         echo "===== domain=$dom sparsity=$s ====="
-        ./run_tau2.sh "$s" "$METHOD" "$dom" \
+        ./benchmarks/tau2/run.sh "$s" "$METHOD" "$dom" \
             || echo "[sweep] WARN: domain=$dom sparsity=$s failed; continuing"
     done
 done
 
 # Gather metrics across the sweep into a figure + table + CSV (under results/).
-"$VENV/bin/python" plot_tau2.py \
+"$VENV/bin/python" benchmarks/tau2/plot.py \
     --runs-dir "$TAU2_RUN_BASE" \
     --metric pass_hat_1 \
     --out results/tau2_passk_vs_sparsity.png \

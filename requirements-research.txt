@@ -1,5 +1,5 @@
 # Research venv (.venv): the per-token FFN masker (src/actsparse.py), the HF
-# OpenAI-compatible server (bfcl_server.py), and the sweep plot (plot_bfcl.py).
+# OpenAI-compatible servers (benchmarks/*/server.py), and the sweep plots.
 # Recreate with uv (no system pip on these boxes):
 #   uv venv --python 3.12 "$VENV"
 #   uv pip install --python "$VENV/bin/python" -r requirements-research.txt

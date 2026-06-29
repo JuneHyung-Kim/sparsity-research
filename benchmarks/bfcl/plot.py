@@ -1,14 +1,14 @@
 """Collect BFCL scores across a sparsity sweep and plot accuracy vs sparsity.
 
-The BFCL analogue of plot.py (PPL vs sparsity). run_bfcl.sh writes one project
-root per sparsity point, named bfcl_run_s00 / bfcl_run_s50 / ... Each holds
+benchmarks/bfcl/run.sh writes one project root per sparsity point, named
+bfcl_run_s00 / bfcl_run_s50 / ... Each holds
     score/<served_name>/<group>/BFCL_v4_<category>_score.json
 whose FIRST line is a summary like {"accuracy": 0.86, "correct_count": 207,
 "total_count": 240}. We glob those, parse the sparsity from the dir name, and
 draw one line per category.
 
 Usage:
-    python plot_bfcl.py --runs-dir . \
+    python benchmarks/bfcl/plot.py --runs-dir . \
         --out results/bfcl_acc_vs_sparsity.png \
         --csv results/bfcl_acc_vs_sparsity.csv
 """
