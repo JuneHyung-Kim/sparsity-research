@@ -49,7 +49,10 @@ mkdir -p "$BASE"
 ROOT="$BASE/bfcl_run_${TAG}"
 SNAP="$("$VENV/bin/python" -c "from huggingface_hub import snapshot_download; print(snapshot_download('$MODEL'))")"
 
-echo "[run_bfcl] model=$MODEL fc=$FC_MODEL sparsity=$SPARSITY method=$METHOD cats=$CATS think=$THINK root=$ROOT"
+echo "[run_bfcl] model=$MODEL fc=$FC_MODEL sparsity=$SPARSITY method=$METHOD cats=$CATS think=$THINK batch=$BATCH max_new=$MAX_NEW root=$ROOT"
+
+# Reduce CUDA fragmentation OOMs — multi_turn/thinking grow the KV cache a lot.
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 # --- start server, wait for readiness, ensure cleanup ---
 "$VENV/bin/python" bfcl_server.py --model "$MODEL" --served-name "$FC_MODEL" \
