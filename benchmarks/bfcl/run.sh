@@ -16,7 +16,8 @@
 # Env knobs:
 #   PORT (1053), MODEL (Qwen/Qwen3-8B), FC_MODEL (=${MODEL}-FC, the BFCL handler
 #   id), VENV (.venv), BFCL_VENV (.venv-bfcl), NUM_THREADS/BATCH (throughput),
-#   THINK (1 = enable Qwen3 reasoning; needed for multi_turn), MAX_NEW (1024).
+#   THINK (Qwen3 reasoning; default 1 = ON, to match the official BFCL baseline —
+#   multi_turn/live need it), MAX_NEW (4096; the official OSS handler's per-step cap).
 set -euo pipefail
 cd "$(dirname "$0")/../.."          # repo root (this script lives in benchmarks/bfcl/)
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"   # so server.py finds src.actsparse
@@ -34,10 +35,13 @@ BFCL_VENV="${BFCL_VENV:-.venv-bfcl}"
 # server's --batch; lower BATCH if the GPU OOMs (bigger model / thinking on).
 NUM_THREADS="${NUM_THREADS:-24}"
 BATCH="${BATCH:-24}"
-# Qwen3 reasoning: off by default (fast, single-turn). multi_turn needs it on,
-# with a higher token cap for the chain-of-thought.
-THINK="${THINK:-0}"
-MAX_NEW="${MAX_NEW:-1024}"
+# Qwen3 reasoning: ON by default — the official Qwen3-8B BFCL baseline runs with
+# thinking enabled, and multi_turn/live need it. The per-step token cap must be large
+# enough not to truncate the chain-of-thought mid-step (the official OSS handler caps
+# at 4096); a small cap (the old 1024) silently floored multi_turn. Set THINK=0 only
+# for a fast non-thinking single-call check, where these don't matter.
+THINK="${THINK:-1}"
+MAX_NEW="${MAX_NEW:-4096}"
 THINK_FLAG=""
 [ "$THINK" != "0" ] && THINK_FLAG="--think"
 

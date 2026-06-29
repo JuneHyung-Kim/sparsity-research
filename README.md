@@ -41,7 +41,9 @@ neurons by `|a_i|` — the **ceiling** any real (cheap) detector would chase.
   LLaMA, so the masker is drop-in). bf16.
 - **Serving:** `benchmarks/bfcl/server.py` — a minimal OpenAI `/v1/completions`
   server in the research venv. Weights load once; the masker is fixed at startup
-  (`--method/--sparsity`). Qwen3 "thinking" is disabled for parse-stability.
+  (`--method/--sparsity`). Qwen3 "thinking" is ON by default (`MAX_NEW=4096`), to
+  match the official Qwen3-8B BFCL baseline; multi_turn/live collapse without it.
+  `THINK=0` (non-thinking, smaller cap) is only for a fast single-call check.
 - **Harness:** `bfcl-eval` in a separate venv (its `[oss]`/vllm extra would
   clobber the research torch). Run with `--skip-server-setup` so BFCL renders
   the FC prompt and parses `<tool_call>` itself and our masker is actually in

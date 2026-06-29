@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=48G
 #SBATCH --partition=gpubase_bygpu_b5
-#SBATCH --time=08:00:00
+#SBATCH --time=24:00:00
 #SBATCH --output=vulcan/logs/%x-%j.out
 #
 # BFCL accuracy-vs-sparsity sweep on one L40S, fully offline.
@@ -17,12 +17,12 @@
 #          vulcan/bfcl_sweep.slurm
 #
 # Defaults run every key-free function-calling category (single_turn = non_live
-# + live, plus multi_turn) across the full sparsity sweep. The server
-# micro-batches requests so this is hours, not days; the 8h wall clock on the
-# 7-day partition (b5) leaves ample margin. web_search (needs a SerpAPI key),
-# memory (needs agentic backends), and format_sensitivity (non-scoring) are
-# excluded. Trim CATS/SPARSITIES for a quick run; lower BATCH/NUM_THREADS via
-# --export if the GPU OOMs.
+# + live, plus multi_turn) across the full sparsity sweep. With thinking ON the
+# multi_turn cases generate long reasoning, so the full 5-point sweep can run many
+# hours per sparsity — hence the 24h wall (b5 allows up to 7 days). For a faster
+# pass, trim SPARSITIES (one point per job) or CATS via --export. web_search (needs
+# a SerpAPI key), memory (needs agentic backends), and format_sensitivity
+# (non-scoring) are excluded. Lower BATCH/NUM_THREADS via --export if the GPU OOMs.
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 source vulcan/env.sh
@@ -37,6 +37,14 @@ SPARSITIES="${SPARSITIES:-0 0.5 0.6 0.7 0.8}"
 export MODEL="${MODEL:-Qwen/Qwen3-8B}"
 # Run artifacts (bfcl_run_s*) land inside the repo; plot reads them from here.
 export BFCL_RUN_BASE="${BFCL_RUN_BASE:-$PWD}"
+# Match the official Qwen3-8B (FC) baseline: thinking ON + 4096-token/step cap. The
+# earlier sweep used run.sh's old defaults (THINK=0 / MAX_NEW=1024), which floored
+# multi_turn (~1-2% vs official ~50%) and ran live ~5-10pp low. Thinking inflates the
+# KV cache, so BATCH is dropped from run.sh's default 24 to fit the L40S (48GB).
+export THINK="${THINK:-1}"
+export MAX_NEW="${MAX_NEW:-4096}"
+export BATCH="${BATCH:-8}"
+export NUM_THREADS="${NUM_THREADS:-8}"
 
 echo "[sweep] model=$MODEL method=$METHOD cats=$CATS sparsities='$SPARSITIES'"
 echo "[sweep] outputs -> $BFCL_RUN_BASE"
