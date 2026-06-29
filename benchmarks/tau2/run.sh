@@ -20,6 +20,9 @@
 #   TAU2_REPO (the cloned tau2-bench, has data/), TRIALS (1; raise for pass^k),
 #   NTASKS (all; set to a small N for a fast subset), CONC (max-concurrency, 8),
 #   THINK (0; 1 enables Qwen3 reasoning), MAX_NEW (1024), SEED (300),
+#   TIMEOUT (600; per-simulation wallclock cap in s, 0 = none — tau2's default of
+#     no timeout lets a looping agent/user run to --max-steps and clog the
+#     concurrency pipe for an hour+, so we cap it), MAXSTEPS (unset = tau2's 200),
 #   TAU2_RUN_BASE (output base; defaults to repo dir).
 set -euo pipefail
 cd "$(dirname "$0")/../.."          # repo root (this script lives in benchmarks/tau2/)
@@ -40,8 +43,16 @@ CONC="${CONC:-8}"
 THINK="${THINK:-0}"
 MAX_NEW="${MAX_NEW:-1024}"
 SEED="${SEED:-300}"
+TIMEOUT="${TIMEOUT:-600}"
+MAXSTEPS="${MAXSTEPS:-}"
 THINK_FLAG=""
 [ "$THINK" != "0" ] && THINK_FLAG="--think"
+# Per-simulation wallclock cap: a stuck (looping / non-terminating) conversation
+# would otherwise hold a concurrency slot until --max-steps, starving the rest.
+TIMEOUT_FLAG=""
+[ "$TIMEOUT" != "0" ] && TIMEOUT_FLAG="--timeout $TIMEOUT"
+MAXSTEPS_FLAG=""
+[ -n "$MAXSTEPS" ] && MAXSTEPS_FLAG="--max-steps $MAXSTEPS"
 
 # tag like s00 / s50 / s70 for the per-sparsity output dir
 TAG="s$(printf '%02d' "$("$VENV/bin/python" -c "print(round(float('$SPARSITY')*100))")")"
@@ -80,7 +91,7 @@ export TAU2_LOCAL_MODELS="$AGENT_NAME,$USER_NAME"
 NTASKS_FLAG=""
 [ -n "${NTASKS:-}" ] && NTASKS_FLAG="--num-tasks $NTASKS"
 
-echo "[run_tau2] model=$MODEL sparsity=$SPARSITY method=$METHOD domain=$DOMAIN trials=$TRIALS conc=$CONC think=$THINK root=$ROOT"
+echo "[run_tau2] model=$MODEL sparsity=$SPARSITY method=$METHOD domain=$DOMAIN trials=$TRIALS conc=$CONC think=$THINK timeout=$TIMEOUT root=$ROOT"
 
 # Reduce CUDA fragmentation OOMs (multi-turn KV cache grows).
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
@@ -107,7 +118,7 @@ done
     --agent-llm "openai/$AGENT_NAME" --agent-llm-args "$AGENT_ARGS" \
     --user-llm  "openai/$USER_NAME"  --user-llm-args  "$USER_ARGS" \
     --num-trials "$TRIALS" --max-concurrency "$CONC" --seed "$SEED" \
-    --save-to "$SAVE_TO" --auto-resume $NTASKS_FLAG
+    --save-to "$SAVE_TO" --auto-resume $NTASKS_FLAG $TIMEOUT_FLAG $MAXSTEPS_FLAG
 
 # --- score: results.json -> compact metrics (pass^k, avg_reward) in our tree ---
 "$TAU2_VENV/bin/python" benchmarks/tau2/score.py "$RESULTS_JSON" \
