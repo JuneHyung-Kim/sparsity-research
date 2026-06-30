@@ -20,12 +20,13 @@ FORCE="${FORCE:-0}"
 # vLLM serving venv (the tau2 Gemma-4 path). vLLM 0.24.0 hard-pins torch 2.11.
 VLLM_VERSION="${VLLM_VERSION:-0.24.0}"
 VLLM_PYTHON="${VLLM_PYTHON:-3.12.13}"
-# torch wheel backend. MUST match the cluster's CUDA runtime (libcudart): a mismatch
-# fails at `import vllm` with a libcudart.so.NN ImportError. 'auto' lets uv detect
-# from the driver; pin explicitly if it guesses wrong (the local 4090 needed cu130,
-# cu129 broke). On the L40S nodes check `nvidia-smi` CUDA version, then e.g.
-#   TORCH_BACKEND=cu124 bash vulcan/setup.sh
-TORCH_BACKEND="${TORCH_BACKEND:-auto}"
+# torch wheel backend. MUST match the cluster GPU's CUDA. Default cu130 = Vulcan
+# L40S (driver 595 / CUDA 13.2; `module avail cuda` shows up to 13.2). Do NOT use
+# 'auto' here: setup runs on the GPU-less LOGIN node, where uv detects no CUDA and
+# silently installs a CPU-only torch (no libtorch_cuda.so -> `import vllm` dies with
+# "libtorch_cuda.so: cannot open shared object file" at run time on the GPU node).
+# Other cluster: set to its CUDA, e.g. TORCH_BACKEND=cu126 bash vulcan/setup.sh
+TORCH_BACKEND="${TORCH_BACKEND:-cu130}"
 
 command -v uv >/dev/null 2>&1 || {
     echo "uv not found on PATH. Install it on scratch first, e.g.:"
