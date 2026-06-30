@@ -28,7 +28,9 @@
 #     24GB 4090, bf16 on the L40S), MAXLEN (16384), GPU_UTIL (0.92),
 #   PORT (8001 agent), USER_PORT (8002 user-sim, sparse only),
 #   TRIALS (1), NTASKS (all; small N for a fast subset), CONC (max-concurrency, 4),
-#   MAX_NEW (1024), SEED (300), TIMEOUT (600s per-sim cap, 0=none), MAXSTEPS (tau2's 200),
+#   THINK (0; 1 = agent-only Gemma-4 reasoning), MAX_NEW (0 = no per-turn cap / stop
+#     at end-of-turn = tau2 default; set N to bound a turn),
+#   SEED (300), TIMEOUT (600s per-sim cap, 0=none), MAXSTEPS (tau2's 200),
 #   FRESH (1 wipes this point's prior sims), TAU2_RUN_BASE (output base; repo dir).
 set -euo pipefail
 cd "$(dirname "$0")/../.."          # repo root (this script lives in benchmarks/tau2/)
@@ -76,11 +78,13 @@ MAXSTEPS="${MAXSTEPS:-}"
 # THINK=1 turns on Gemma-4's reasoning channel for the AGENT only (the policy under
 # test); the user-sim + judge stay non-thinking. vLLM separates the reasoning into
 # reasoning_content (reasoning-parser gemma4), so tau2's message history stays clean.
-# Thinking needs room: the reasoning channel alone is ~1-4k tokens, so default
-# max_new jumps to 4096 (1024 would truncate it). Passed via litellm extra_body ->
-# vLLM chat_template_kwargs (verified to engage reasoning end to end).
+# Passed via litellm extra_body -> vLLM chat_template_kwargs (verified end to end).
 THINK="${THINK:-0}"
-if [ "$THINK" != "0" ]; then MAX_NEW="${MAX_NEW:-4096}"; else MAX_NEW="${MAX_NEW:-1024}"; fi
+# Per-turn generation cap. Default 0 = NO cap: the server generates to the model's
+# end-of-turn token, which is tau2's own default (it passes no max_tokens). We used
+# to hardcode 1024, which truncates long turns and would gut thinking (reasoning
+# alone is 1-4k tokens). Set MAX_NEW=N only to deliberately bound a turn.
+MAX_NEW="${MAX_NEW:-0}"
 
 # fp8 -> --quantization fp8; bf16/none -> let vLLM load native dtype.
 QUANT_FLAG=""
@@ -191,11 +195,15 @@ fi
 # sparsify the judge on EVERY point -- strictly worse -- so dense is the right global.
 export OPENAI_API_BASE="$USER_BASE"
 export OPENAI_API_KEY="${OPENAI_API_KEY:-local}"
+# Per-turn cap: include max_tokens only when MAX_NEW>0; otherwise omit it so the
+# server stops at the end-of-turn token (no artificial truncation, = tau2 default).
+MAXTOK=""
+[ "$MAX_NEW" != "0" ] && MAXTOK=", \"max_tokens\": $MAX_NEW"
 # Agent-only reasoning: litellm extra_body -> vLLM chat_template_kwargs.enable_thinking.
 AGENT_THINK=""
 [ "$THINK" != "0" ] && AGENT_THINK=', "extra_body": {"chat_template_kwargs": {"enable_thinking": true}}'
-AGENT_ARGS="{\"api_base\": \"$AGENT_BASE\", \"api_key\": \"local\", \"temperature\": 0.0, \"max_tokens\": $MAX_NEW$AGENT_THINK}"
-USER_ARGS="{\"api_base\": \"$USER_BASE\", \"api_key\": \"local\", \"temperature\": 0.0, \"max_tokens\": $MAX_NEW}"
+AGENT_ARGS="{\"api_base\": \"$AGENT_BASE\", \"api_key\": \"local\", \"temperature\": 0.0$MAXTOK$AGENT_THINK}"
+USER_ARGS="{\"api_base\": \"$USER_BASE\", \"api_key\": \"local\", \"temperature\": 0.0$MAXTOK}"
 export TAU2_LOCAL_MODELS="$AGENT_NAME,$USER_NAME,$JUDGE_NAME"
 
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
