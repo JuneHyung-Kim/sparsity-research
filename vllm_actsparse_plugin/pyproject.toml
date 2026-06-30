@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vllm-actsparse"
+version = "0.1.0"
+description = "Contextual activation-sparsity masker injected into vLLM's Gemma-4 MLP via the general-plugins hook."
+requires-python = ">=3.12"
+
+# vLLM calls every entry point in this group once per process (API server AND
+# each EngineCore worker) during startup, before the model is built. That is the
+# only place a monkeypatch reliably reaches the worker process that holds the
+# weights -- see vllm.plugins.load_general_plugins.
+[project.entry-points."vllm.general_plugins"]
+actsparse = "vllm_actsparse:register"
+
+[tool.setuptools]
+packages = ["vllm_actsparse"]

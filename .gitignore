@@ -21,5 +21,8 @@ bfcl_run*/
 tau2-bench/
 tau2_run*/
 
+# vLLM (separate env; pinned torch 2.11.0 -- never commit)
+.venv-vllm/
+
 # SLURM job logs
 vulcan/logs/
