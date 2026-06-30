@@ -18,10 +18,11 @@
 #   sbatch --export=ALL,SPARSITIES="0 0.5 0.8",DOMAINS="retail airline",\
 #          METHOD=oracle_gate,TRIALS=1,CONC=8 vulcan/tau2_sweep.slurm
 #
-# Defaults: oracle_gate (the ceiling masker), retail domain (114 tasks; the
-# domain with the most headroom for an 8B agent), pass^1 over the full sparsity
-# sweep. retail at concurrency 8 is ~10-15 min/point, so the full sweep is ~1-2h;
-# the 12h wall clock leaves margin for adding airline or raising TRIALS (pass^k).
+# Defaults: oracle_gate (the ceiling masker), retail domain (114 tasks), pass^1
+# over the full sparsity sweep. On an L40S (48GB) the bf16 12B agent fits with
+# room to raise CONC (16+ -> more concurrent tasks batched). Subset with NTASKS
+# for the sweep (sweep cost = points x tasks); run the full 114 only for the
+# headline dense + best-sparse points. The 12h wall clock is ample.
 # multi-domain: list DOMAINS to sweep each. Raise TRIALS for pass^2..k.
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
@@ -34,7 +35,7 @@ export TRANSFORMERS_OFFLINE=1
 METHOD="${METHOD:-oracle_gate}"
 DOMAINS="${DOMAINS:-retail}"
 SPARSITIES="${SPARSITIES:-0 0.5 0.6 0.7 0.8}"
-export MODEL="${MODEL:-Qwen/Qwen3-8B}"
+export MODEL="${MODEL:-google/gemma-4-12B-it}"
 export TRIALS="${TRIALS:-1}"
 export CONC="${CONC:-8}"
 # Run artifacts (tau2_run_s*) land inside the repo; plot reads them from here.
