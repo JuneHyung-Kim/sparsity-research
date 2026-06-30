@@ -106,6 +106,15 @@ fi
 # flashinfer sampler wants a separate JIT toolchain).
 export PATH="$VLLM_VENV/bin:$PATH"
 export VLLM_USE_FLASHINFER_SAMPLER=0
+# vLLM's _C_stable_libtorch loads CUDA libs (libcudart.so.NN, cudnn, nccl, ...)
+# BEFORE torch wires up its bundled-lib search path, so the cu* wheel libs under
+# site-packages/nvidia/*/lib must be on LD_LIBRARY_PATH or import dies with
+# "libcudart.so.13: cannot open shared object file" (seen on the L40S nodes, where
+# there is no system CUDA on the loader path -- only the local 4090 had it). The
+# node's driver must support that CUDA: Vulcan L40S = driver 595 / CUDA 13.2, wheel
+# = cu13. Self-contained, no `module load` needed.
+_NVLIB="$(ls -d "$VLLM_VENV"/lib/python*/site-packages/nvidia/*/lib 2>/dev/null | paste -sd: -)"
+[ -n "$_NVLIB" ] && export LD_LIBRARY_PATH="${_NVLIB}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 VLLM_BIN="$VLLM_VENV/bin/vllm"
 
 # start_vllm <port> <sparsity> <gpu> <logfile> <served-name...>

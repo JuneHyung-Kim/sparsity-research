@@ -67,12 +67,19 @@ build_vllm_venv() {
     uv pip install --python "$VLLM_VENV/bin/python" \
         "vllm==$VLLM_VERSION" --torch-backend="$TORCH_BACKEND"
     uv pip install --python "$VLLM_VENV/bin/python" -e vllm_actsparse_plugin
-    # sanity: the gemma4 model + tool/reasoning parsers must import (offline-safe)
+    # sanity. The login node has no GPU/CUDA, so we canNOT truly `import vllm` here
+    # (it would fail on libcuda/libcudart regardless of the wheel). Only confirm the
+    # packages are INSTALLED via find_spec. The real vLLM CUDA import is validated at
+    # run time on a GPU node, where run_vllm.sh puts the wheel's bundled CUDA libs
+    # (site-packages/nvidia/*/lib) on LD_LIBRARY_PATH; the node driver must support
+    # the wheel's CUDA (Vulcan L40S = driver 595 / CUDA 13.2, wheel = cu13).
     "$VLLM_VENV/bin/python" - <<'PY'
 import importlib.util as u
+assert u.find_spec("vllm"), "vllm not installed"
 assert u.find_spec("vllm.model_executor.models.gemma4"), "vllm gemma4 model missing"
 import vllm_actsparse; assert hasattr(vllm_actsparse, "register")
-print("[setup] vllm venv OK (gemma4 model + actsparse plugin import)")
+print("[setup] vllm venv: package + gemma4 model + actsparse plugin INSTALLED")
+print("[setup] NOTE: validate `import vllm` on a GPU node (login node has no CUDA).")
 PY
 }
 build_vllm_venv
