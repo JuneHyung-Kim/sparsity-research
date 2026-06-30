@@ -44,6 +44,10 @@ export BFCL_RUN_BASE="${BFCL_RUN_BASE:-$PWD}"
 # multi_turn (~1-2% vs official ~50%) and ran live ~5-10pp low.
 export THINK="${THINK:-1}"
 export MAX_NEW="${MAX_NEW:-4096}"
+# Unique server port per job (derived from the SLURM job id) so several chopped jobs
+# can run concurrently -- even if two land on the same node -- without colliding on
+# the default 1053. run.sh passes this to both the server and BFCL's client.
+export PORT="${PORT:-$((10000 + ${SLURM_JOB_ID:-0} % 40000))}"
 # Per-group server batch (thinking inflates the KV cache; long multi_turn prompts need
 # a much smaller batch than short single_turn ones). Set CATS_ST="" or CATS_MT="" to
 # run only one group. NUM_THREADS is matched to BATCH so the micro-batch stays full.
@@ -82,9 +86,11 @@ if [ "${SKIP_PLOT:-0}" = "0" ]; then
         --runs-dir "$BFCL_RUN_BASE" \
         --out results/bfcl_acc_vs_sparsity.png \
         --csv results/bfcl_acc_vs_sparsity.csv
+    # Remove BFCL's transient HF lock dirs (pure cruft; scores/results are kept).
+    # ONLY in the single-job case: when chopped jobs share a root concurrently, one
+    # job deleting .file_locks could corrupt another's in-flight writes, so the
+    # chopped flow (SKIP_PLOT=1) leaves them and the final manual plot step cleans up.
+    find "$BFCL_RUN_BASE"/bfcl_run_s* -type d -name .file_locks -exec rm -rf {} + 2>/dev/null || true
 fi
-
-# Remove BFCL's transient HF lock dirs (pure cruft; scores/results are kept).
-find "$BFCL_RUN_BASE"/bfcl_run_s* -type d -name .file_locks -exec rm -rf {} + 2>/dev/null || true
 
 echo "[sweep] done. results -> results/bfcl_acc_vs_sparsity.{png,md,csv}"
