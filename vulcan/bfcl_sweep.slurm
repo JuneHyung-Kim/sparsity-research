@@ -58,10 +58,16 @@ for s in $SPARSITIES; do
 done
 
 # Gather scores across the sweep into a figure + CSV (committed under results/).
-"$VENV/bin/python" benchmarks/bfcl/plot.py \
-    --runs-dir "$BFCL_RUN_BASE" \
-    --out results/bfcl_acc_vs_sparsity.png \
-    --csv results/bfcl_acc_vs_sparsity.csv
+# SKIP_PLOT=1 when splitting the run across several jobs (e.g. single_turn and
+# multi_turn at different batch sizes, or one job per sparsity): each job would
+# otherwise overwrite results/ with a partial table and race the others. Skip here
+# and run plot.py once by hand after all jobs finish.
+if [ "${SKIP_PLOT:-0}" = "0" ]; then
+    "$VENV/bin/python" benchmarks/bfcl/plot.py \
+        --runs-dir "$BFCL_RUN_BASE" \
+        --out results/bfcl_acc_vs_sparsity.png \
+        --csv results/bfcl_acc_vs_sparsity.csv
+fi
 
 # Remove BFCL's transient HF lock dirs (pure cruft; scores/results are kept).
 find "$BFCL_RUN_BASE"/bfcl_run_s* -type d -name .file_locks -exec rm -rf {} + 2>/dev/null || true
