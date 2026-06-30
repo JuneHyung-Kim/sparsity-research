@@ -51,8 +51,10 @@ export PORT="${PORT:-$((10000 + ${SLURM_JOB_ID:-0} % 40000))}"
 # Per-group server batch (thinking inflates the KV cache; long multi_turn prompts need
 # a much smaller batch than short single_turn ones). Set CATS_ST="" or CATS_MT="" to
 # run only one group. NUM_THREADS is matched to BATCH so the micro-batch stays full.
-CATS_ST="${CATS_ST:-single_turn}"
-CATS_MT="${CATS_MT:-multi_turn}"
+# NOTE: ${VAR-default} (no colon) so an explicit empty value (CATS_ST="" / CATS_MT="")
+# skips that group -- ${VAR:-default} would wrongly treat "" as unset and re-add it.
+CATS_ST="${CATS_ST-single_turn}"
+CATS_MT="${CATS_MT-multi_turn}"
 BATCH_ST="${BATCH_ST:-8}"    # single_turn: prompts <=10k  -> batch 8 (~41GB on L40S)
 BATCH_MT="${BATCH_MT:-4}"    # multi_turn:  prompts ~17-20k -> batch 4 (~39-44GB)
 
