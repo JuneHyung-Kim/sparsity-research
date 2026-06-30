@@ -6,15 +6,16 @@ string), tau2-bench talks the OpenAI *chat + tools* contract through LiteLLM:
 it sends `messages` + `tools` (function schemas) and reads back
 `choices[0].message.tool_calls`. So this server must honour that contract:
 
-  * apply Qwen3's chat template with `tools=` (the template renders OpenAI
-    function schemas into <tools> and tool results into <tool_response>),
+  * apply Gemma 4's chat template with `tools=` (it renders the function schemas
+    and OpenAI role:"tool" results natively into Gemma's tool DSL),
   * generate (with the masker in the FFN path),
-  * parse Qwen3's `<tool_call>{json}</tool_call>` blocks back into OpenAI
-    `tool_calls`, and strip any leading <think> so multi-turn history stays lean.
+  * parse Gemma's `<|tool_call>call:NAME{args}<tool_call|>` blocks back into
+    OpenAI `tool_calls`, and strip the `<|channel>thought` reasoning channel so
+    the multi-turn history stays lean.
 
 tau2 needs TWO model roles: the **agent** (the policy we evaluate) and the
 **user simulator** (part of the environment). The masker belongs only on the
-agent. We therefore load ONE Qwen3-8B and route by the request's `model` name:
+agent. We therefore load ONE Gemma-4-12B and route by the request's `model` name:
   --served-name      -> agent,    masker = build_masker(--method, --sparsity)
   --user-served-name -> user-sim, masker = None (dense)
 The user simulator is the same dense weights held fixed across a sweep, so the
@@ -32,9 +33,10 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import (AutoTokenizer, BitsAndBytesConfig,
+                          Gemma4UnifiedForConditionalGeneration)
 
-from src.actsparse import build_masker, install_sparse_mlps
+from src.actsparse import build_masker, install_sparse_mlps, get_decoder_layers
 
 # ---- globals set in main() ----
 MODEL = None
@@ -43,12 +45,17 @@ CTRL = None
 ARGS = None
 REQ_Q = None
 AGENT_MASKER = None              # built once at startup (None when --sparsity == 0)
-STOPS = ("<|im_end|>", "<|endoftext|>")
-# Strip a leading <think>...</think> from the generated text: when thinking is on
-# the model reasons, but we keep only the answer/tool_call in the returned content
-# so tau2's re-sent multi-turn history doesn't accumulate the chain-of-thought.
-THINK_RE = re.compile(r"^\s*<think>.*?</think>\s*", re.S)
-TOOLCALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.S)
+STOP_IDS = None                  # set in main(): [<eos>, <turn|>, <|tool_response>]
+# Gemma 4 ends an agent turn with <turn|>; right after a tool call it instead emits
+# <|tool_response> (waiting for the result). Either terminates the assistant's text.
+STOPS = ("<turn|>", "<|tool_response>", "<eos>")
+# Gemma 4 reasons inside a <|channel>thought ... <channel|> channel; strip it so the
+# multi-turn history we hand back to tau2 carries only the answer/tool_calls.
+CHANNEL_RE = re.compile(r"<\|channel>.*?<channel\|>", re.S)
+# A tool call is <|tool_call>call:NAME{args}<tool_call|>; the captured group is
+# NAME{...} where args is Gemma's mini-DSL (strings <|"|>..<|"|>, true/false,
+# bare numbers, [..] arrays, {..} objects).
+TOOLCALL_RE = re.compile(r"<\|tool_call>call:(.*?)<tool_call\|>", re.S)
 
 
 class _Req:
@@ -70,9 +77,10 @@ class _Req:
 
 
 def _render(req):
-    """OpenAI messages(+tools) -> a single prompt string via Qwen3's chat
-    template. enable_thinking is controlled at template time (not by appending an
-    empty <think>), which is the supported Qwen3 knob."""
+    """OpenAI messages(+tools) -> a single prompt string via Gemma 4's chat
+    template. The template renders tool schemas and OpenAI role:"tool" results
+    natively; enable_thinking toggles the <|think|> / <|channel>thought reasoning
+    channel at template time."""
     return TOK.apply_chat_template(
         req.messages,
         tools=req.tools or None,
@@ -82,26 +90,94 @@ def _render(req):
     )
 
 
+_QUOTE = '<|"|>'                                  # Gemma's string delimiter
+
+
+def _parse_value(s, i):
+    """Parse one Gemma-DSL value from s at index i -> (python value, next index).
+    Strings are <|"|>..<|"|>, bools true/false, objects {k:v,..}, arrays [v,..],
+    everything else a bare scalar (int/float, else raw string)."""
+    n = len(s)
+    if s.startswith(_QUOTE, i):
+        j = s.find(_QUOTE, i + len(_QUOTE))
+        if j == -1:
+            return s[i + len(_QUOTE):], n
+        return s[i + len(_QUOTE):j], j + len(_QUOTE)
+    c = s[i]
+    if c == '{':
+        return _parse_obj(s, i)
+    if c == '[':
+        arr = []
+        i += 1
+        while i < n and s[i] != ']':
+            v, i = _parse_value(s, i)
+            arr.append(v)
+            if i < n and s[i] == ',':
+                i += 1
+        return arr, (i + 1 if i < n else n)
+    j = i
+    while j < n and s[j] not in ',}]':
+        j += 1
+    tok = s[i:j].strip()
+    if tok == 'true':
+        v = True
+    elif tok == 'false':
+        v = False
+    elif tok in ('null', 'none', ''):
+        v = None
+    else:
+        try:
+            v = int(tok)
+        except ValueError:
+            try:
+                v = float(tok)
+            except ValueError:
+                v = tok
+    return v, j
+
+
+def _parse_obj(s, i):
+    """s[i] == '{'; parse a {bareKey:value,..} object -> (dict, next index)."""
+    obj = {}
+    n = len(s)
+    i += 1                                        # past '{'
+    while i < n and s[i] != '}':
+        k = i
+        while i < n and s[i] != ':':
+            i += 1
+        key = s[k:i].strip()
+        i += 1                                    # past ':'
+        if i >= n:
+            break
+        val, i = _parse_value(s, i)
+        obj[key] = val
+        if i < n and s[i] == ',':
+            i += 1
+    return obj, (i + 1 if i < n else n)
+
+
 def _parse_completion(text):
-    """Qwen3 completion -> (content, tool_calls) in OpenAI shape.
+    """Gemma 4 completion -> (content, tool_calls) in OpenAI shape.
     tool_calls[i].function.arguments is a JSON *string* (litellm/tau2 json.loads
     it). content is the non-tool-call text, or None when the turn is pure calls."""
-    text = THINK_RE.sub("", text, count=1)
+    text = CHANNEL_RE.sub("", text)               # drop the reasoning channel
     for stop in STOPS:
         j = text.find(stop)
         if j != -1:
             text = text[:j]
     tool_calls = []
     for m in TOOLCALL_RE.finditer(text):
+        inner = m.group(1)                        # NAME{...}
+        b = inner.find('{')
+        name = (inner if b == -1 else inner[:b]).strip()
         try:
-            obj = json.loads(m.group(1))
-        except json.JSONDecodeError:
-            continue
+            args, _ = _parse_obj(inner[b:], 0) if b != -1 else ({}, 0)
+        except Exception:
+            args = {}
         tool_calls.append({
             "id": "call_" + uuid.uuid4().hex[:24],
             "type": "function",
-            "function": {"name": obj.get("name", ""),
-                         "arguments": json.dumps(obj.get("arguments", {}))},
+            "function": {"name": name, "arguments": json.dumps(args)},
         })
     content = TOOLCALL_RE.sub("", text).strip()
     return (content or None), (tool_calls or None)
@@ -130,6 +206,7 @@ def _run_group(reqs):
         temperature=temp if do_sample else None,
         top_p=0.8 if do_sample else None,
         pad_token_id=TOK.pad_token_id,
+        eos_token_id=STOP_IDS,                       # stop at turn / tool-response / eos
     )
     gen = out[:, n_in:]                          # [B, new] — common offset (left pad)
     pad_id = TOK.pad_token_id
@@ -233,12 +310,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global MODEL, TOK, CTRL, ARGS, REQ_Q, AGENT_MASKER
+    global MODEL, TOK, CTRL, ARGS, REQ_Q, AGENT_MASKER, STOP_IDS
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="Qwen/Qwen3-8B")
-    ap.add_argument("--served-name", default="Qwen3-8B-agent",
+    ap.add_argument("--model", default="google/gemma-4-12B-it")
+    ap.add_argument("--served-name", default="gemma-4-12b-agent",
                     help="model id for the AGENT role (masker applied)")
-    ap.add_argument("--user-served-name", default="Qwen3-8B-user",
+    ap.add_argument("--user-served-name", default="gemma-4-12b-user",
                     help="model id for the USER-SIMULATOR role (always dense)")
     ap.add_argument("--port", type=int, default=1055)
     ap.add_argument("--method", default="oracle_gate",
@@ -250,23 +327,36 @@ def main():
     ap.add_argument("--batch-wait", type=float, default=15.0,
                     help="ms to accumulate a batch before generating")
     ap.add_argument("--think", action="store_true",
-                    help="allow Qwen3 thinking (default: off for speed)")
+                    help="enable Gemma 4 reasoning channel (default: off for speed)")
+    ap.add_argument("--load-4bit", action="store_true",
+                    help="bitsandbytes nf4 load for a 24GB dev GPU; omit for bf16 (Vulcan)")
     ARGS = ap.parse_args()
     REQ_Q = queue.Queue()
 
-    print(f"[tau2-server] loading {ARGS.model} (bf16) ...", flush=True)
+    print(f"[tau2-server] loading {ARGS.model} "
+          f"({'nf4' if ARGS.load_4bit else 'bf16'}) ...", flush=True)
     TOK = AutoTokenizer.from_pretrained(ARGS.model)
     TOK.padding_side = "left"            # batched decode -> generated tokens share a right offset
     if TOK.pad_token_id is None:
         TOK.pad_token = TOK.eos_token
-    MODEL = AutoModelForCausalLM.from_pretrained(
-        ARGS.model, dtype=torch.bfloat16, device_map="cuda")
+    # Halt generation at the turn boundary (end-of-turn / tool-response / eos)
+    # instead of always running to --max-new.
+    STOP_IDS = [i for i in (TOK.eos_token_id,
+                            TOK.convert_tokens_to_ids("<turn|>"),
+                            TOK.convert_tokens_to_ids("<|tool_response>"))
+                if i is not None and i >= 0]
+    load_kwargs = dict(dtype=torch.bfloat16, device_map="auto")
+    if ARGS.load_4bit:
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16)
+    MODEL = Gemma4UnifiedForConditionalGeneration.from_pretrained(ARGS.model, **load_kwargs)
     MODEL.eval()
 
     CTRL, _ = install_sparse_mlps(MODEL)
-    sample = MODEL.model.layers[0].mlp
+    sample = get_decoder_layers(MODEL)[0].mlp        # SparseMLP after install
     assert hasattr(sample.mlp, "gate_proj") and hasattr(sample.mlp, "act_fn"), \
-        "MLP does not look like a SwiGLU gate/up/down FFN"
+        "MLP does not look like a gate/up/down (Sw/Ge)GLU FFN"
     if ARGS.sparsity > 0:
         AGENT_MASKER = build_masker(ARGS.method, ARGS.sparsity, MODEL.device)
         print(f"[tau2-server] agent masker ON: method={ARGS.method} "

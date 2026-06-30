@@ -22,6 +22,14 @@ def get_decoder_layers(model):
     base = model.model
     if hasattr(base, "layers"):
         return base.layers
+    # Multimodal wrapper (e.g. Gemma 4 Unified): the text decoder is nested under
+    # .language_model (itself a CausalLM wrapper holding .model.layers). Reach it
+    # so the masker still wraps the SwiGLU/GeGLU FFNs of the text tower.
+    lm = getattr(base, "language_model", None)
+    if lm is not None:
+        lm_base = getattr(lm, "model", lm)
+        if hasattr(lm_base, "layers"):
+            return lm_base.layers
     if hasattr(base, "decoder") and hasattr(base.decoder, "layers"):
         return base.decoder.layers
     raise AttributeError("could not locate decoder layers")
