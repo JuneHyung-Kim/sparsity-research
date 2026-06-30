@@ -40,6 +40,10 @@ DOMAIN="${3:-retail}"
 
 MODEL="${MODEL:-google/gemma-4-12B-it}"
 VLLM_VENV="${VLLM_VENV:-.venv-vllm}"
+# May arrive absolute (vulcan/env.sh exports it) or relative (bare default, resolved
+# against the repo root we cd'd into). Canonicalize to absolute so PATH/VLLM_BIN are
+# never built as "$PWD/<absolute>".
+case "$VLLM_VENV" in /*) ;; *) VLLM_VENV="$PWD/$VLLM_VENV" ;; esac
 TAU2_VENV="${TAU2_VENV:-.venv-tau2}"
 TAU2_REPO="${TAU2_REPO:-$PWD/tau2-bench}"
 AGENT_NAME="gemma-4-12b-agent"
@@ -100,9 +104,9 @@ fi
 # --- vLLM serving ---
 # .venv-vllm/bin on PATH so the ninja shim is found; native triton sampler (the
 # flashinfer sampler wants a separate JIT toolchain).
-export PATH="$PWD/$VLLM_VENV/bin:$PATH"
+export PATH="$VLLM_VENV/bin:$PATH"
 export VLLM_USE_FLASHINFER_SAMPLER=0
-VLLM_BIN="$PWD/$VLLM_VENV/bin/vllm"
+VLLM_BIN="$VLLM_VENV/bin/vllm"
 
 # start_vllm <port> <sparsity> <gpu> <logfile> <served-name...>
 start_vllm() {
