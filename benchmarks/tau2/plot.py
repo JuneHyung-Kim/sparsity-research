@@ -72,7 +72,7 @@ def main():
     ap.add_argument("--out", default="results/tau2_passk_vs_sparsity.png")
     ap.add_argument("--csv", default="results/tau2_passk_vs_sparsity.csv")
     ap.add_argument("--md", default="results/tau2_passk_vs_sparsity.md")
-    ap.add_argument("--title", default="tau2-bench vs activation sparsity (Qwen3-8B)")
+    ap.add_argument("--title", default="tau2-bench vs activation sparsity (Gemma-4-12B)")
     args = ap.parse_args()
 
     records = collect(args.runs_dir)
