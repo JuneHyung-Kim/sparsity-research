@@ -70,10 +70,17 @@ USER_GPU="${USER_GPU:-1}"
 
 TRIALS="${TRIALS:-1}"
 CONC="${CONC:-4}"
-MAX_NEW="${MAX_NEW:-1024}"
 SEED="${SEED:-300}"
 TIMEOUT="${TIMEOUT:-600}"
 MAXSTEPS="${MAXSTEPS:-}"
+# THINK=1 turns on Gemma-4's reasoning channel for the AGENT only (the policy under
+# test); the user-sim + judge stay non-thinking. vLLM separates the reasoning into
+# reasoning_content (reasoning-parser gemma4), so tau2's message history stays clean.
+# Thinking needs room: the reasoning channel alone is ~1-4k tokens, so default
+# max_new jumps to 4096 (1024 would truncate it). Passed via litellm extra_body ->
+# vLLM chat_template_kwargs (verified to engage reasoning end to end).
+THINK="${THINK:-0}"
+if [ "$THINK" != "0" ]; then MAX_NEW="${MAX_NEW:-4096}"; else MAX_NEW="${MAX_NEW:-1024}"; fi
 
 # fp8 -> --quantization fp8; bf16/none -> let vLLM load native dtype.
 QUANT_FLAG=""
@@ -184,7 +191,10 @@ fi
 # sparsify the judge on EVERY point -- strictly worse -- so dense is the right global.
 export OPENAI_API_BASE="$USER_BASE"
 export OPENAI_API_KEY="${OPENAI_API_KEY:-local}"
-AGENT_ARGS="{\"api_base\": \"$AGENT_BASE\", \"api_key\": \"local\", \"temperature\": 0.0, \"max_tokens\": $MAX_NEW}"
+# Agent-only reasoning: litellm extra_body -> vLLM chat_template_kwargs.enable_thinking.
+AGENT_THINK=""
+[ "$THINK" != "0" ] && AGENT_THINK=', "extra_body": {"chat_template_kwargs": {"enable_thinking": true}}'
+AGENT_ARGS="{\"api_base\": \"$AGENT_BASE\", \"api_key\": \"local\", \"temperature\": 0.0, \"max_tokens\": $MAX_NEW$AGENT_THINK}"
 USER_ARGS="{\"api_base\": \"$USER_BASE\", \"api_key\": \"local\", \"temperature\": 0.0, \"max_tokens\": $MAX_NEW}"
 export TAU2_LOCAL_MODELS="$AGENT_NAME,$USER_NAME,$JUDGE_NAME"
 
