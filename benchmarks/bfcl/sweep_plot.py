@@ -27,6 +27,7 @@ from collections import defaultdict
 # Capability groups for the single-turn (T1) sweep. Group accuracy is
 # count-weighted (sum correct / sum total) across its categories.
 GROUPS = {
+    # single_turn (T1)
     "simple (single call)": ["simple_python", "simple_java", "simple_javascript",
                              "live_simple"],
     "compositional (multi/parallel)": ["multiple", "parallel", "parallel_multiple",
@@ -34,6 +35,10 @@ GROUPS = {
                                        "live_parallel_multiple"],
     "abstention (irrelevance)": ["irrelevance", "live_irrelevance"],
     "relevance (should call)": ["live_relevance"],
+    # multi_turn (T2) + memory (T3) -- empty groups are skipped in the output
+    "multi_turn": ["multi_turn_base", "multi_turn_miss_func", "multi_turn_miss_param",
+                   "multi_turn_long_context"],
+    "memory": ["memory_kv", "memory_vector", "memory_rec_sum"],
 }
 
 
@@ -90,7 +95,7 @@ def group_weighted(raw, methods):
     """-> table[group][method][sparsity] = weighted accuracy (or None)."""
     sparsities = sorted({s for (_, s, _) in raw})
     out = {}
-    for gname, cats in list(GROUPS.items()) + [("OVERALL (all single-turn)", None)]:
+    for gname, cats in list(GROUPS.items()) + [("OVERALL (all categories)", None)]:
         out[gname] = {}
         for m in methods:
             out[gname][m] = {}
@@ -104,6 +109,10 @@ def group_weighted(raw, methods):
                     corr += c
                     tot += t
                 out[gname][m][s] = (corr / tot) if tot else None
+    # Drop groups with no categories present in this run (keep OVERALL always).
+    out = {g: pm for g, pm in out.items()
+           if g.startswith("OVERALL")
+           or any(v is not None for pm_m in pm.values() for v in pm_m.values())}
     return out, sparsities
 
 

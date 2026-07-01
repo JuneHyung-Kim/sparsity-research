@@ -26,7 +26,7 @@ Count-weighted accuracy (sum correct / sum total). s=0 = dense.
 |---|---|---|---|---|
 | oracle_gate | 75.00% | 81.25% | 62.50% | 12.50% |
 
-## OVERALL (all single-turn)
+## OVERALL (all categories)
 
 | method | s=0 | s=0.5 | s=0.7 | s=0.85 |
 |---|---|---|---|---|
