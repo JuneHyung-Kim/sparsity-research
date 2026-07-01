@@ -90,7 +90,8 @@ import json, os, re, sys, random
 from bfcl_eval._llm_response_generation import parse_test_category_argument, load_dataset_entry
 root, cats_arg, n = sys.argv[1], sys.argv[2], int(sys.argv[3])
 seed = sys.argv[4] if len(sys.argv) > 4 else ""
-cats = parse_test_category_argument([cats_arg])        # expand aliases -> real categories
+cats = parse_test_category_argument(                   # expand aliases -> real categories
+    [c.strip() for c in cats_arg.split(",") if c.strip()])   # CATS may be comma-joined (multi_turn,memory)
 ids = {}
 if seed != "":
     rng = random.Random(int(seed))
