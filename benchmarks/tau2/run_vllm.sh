@@ -96,6 +96,26 @@ TIMEOUT_FLAG=""; [ "$TIMEOUT" != "0" ] && TIMEOUT_FLAG="--timeout $TIMEOUT"
 MAXSTEPS_FLAG=""; [ -n "$MAXSTEPS" ] && MAXSTEPS_FLAG="--max-steps $MAXSTEPS"
 NTASKS_FLAG=""; [ -n "${NTASKS:-}" ] && NTASKS_FLAG="--num-tasks $NTASKS"
 
+# Fixed task subset for a paired sweep: TASK_IDS_FILE = one task id per line
+# (benchmarks/tau2/make_subsets.py freezes these). Passed as --task-ids so EVERY
+# sparsity point runs the identical tasks. Takes precedence over NTASKS, which only
+# takes the first N (not a random sample). Read into an array so ids with shell
+# metacharacters (telecom ids look like `[mobile_data_issue]...[PERSONA:None]`)
+# survive quoting.
+TASK_IDS_FLAG=()
+if [ -n "${TASK_IDS_FILE:-}" ]; then
+    [ -f "$TASK_IDS_FILE" ] || { echo "[run_tau2_vllm] TASK_IDS_FILE not found: $TASK_IDS_FILE" >&2; exit 1; }
+    mapfile -t _RAWIDS < "$TASK_IDS_FILE"
+    _IDS=(); for _x in "${_RAWIDS[@]}"; do [ -n "$_x" ] && _IDS+=("$_x"); done
+    [ "${#_IDS[@]}" -gt 0 ] || { echo "[run_tau2_vllm] TASK_IDS_FILE is empty: $TASK_IDS_FILE" >&2; exit 1; }
+    TASK_IDS_FLAG=(--task-ids "${_IDS[@]}")
+    if [ -n "${NTASKS:-}" ]; then
+        echo "[run_tau2_vllm] NOTE: TASK_IDS_FILE set -> ignoring NTASKS=$NTASKS"
+        NTASKS_FLAG=""
+    fi
+    echo "[run_tau2_vllm] task subset: ${#_IDS[@]} ids from $TASK_IDS_FILE"
+fi
+
 # tag like s00 / s50 / s70 for the per-sparsity output dir
 TAG="s$(printf '%02d' "$("$VLLM_VENV/bin/python" -c "print(round(float('$SPARSITY')*100))")")"
 BASE="${TAU2_RUN_BASE:-$PWD}"
@@ -222,7 +242,7 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
     --agent-llm "openai/$AGENT_NAME" --agent-llm-args "$AGENT_ARGS" \
     --user-llm  "openai/$USER_NAME"  --user-llm-args  "$USER_ARGS" \
     --num-trials "$TRIALS" --max-concurrency "$CONC" --seed "$SEED" \
-    --save-to "$SAVE_TO" --auto-resume $NTASKS_FLAG $TIMEOUT_FLAG $MAXSTEPS_FLAG
+    --save-to "$SAVE_TO" --auto-resume $NTASKS_FLAG $TIMEOUT_FLAG $MAXSTEPS_FLAG "${TASK_IDS_FLAG[@]}"
 
 # --- score: results.json -> compact metrics (pass^k, avg_reward) ---
 "$TAU2_VENV/bin/python" benchmarks/tau2/score.py "$RESULTS_JSON" \
