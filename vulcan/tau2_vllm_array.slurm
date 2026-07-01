@@ -43,7 +43,10 @@ SP="${SPARSITIES[$(( i % NS ))]}"
 # ---- fixed run config (see the sweep plan) ----
 export MODEL="${MODEL:-google/gemma-4-12B-it}"
 export QUANT="${QUANT:-bf16}"              # bf16 on the L40S
-export MAXLEN="${MAXLEN:-16384}"           # retail/airline rarely need 32k; keeps KV small -> more concurrency
+export MAXLEN="${MAXLEN:-32768}"           # MUST exceed max input + MAX_NEW: input+output<=max_model_len,
+                                           # else long turns 400 with ContextWindowExceededError. 16384 was too
+                                           # tight (retail hits ~12k input + 4096 out > 16384). Paged KV, so a
+                                           # bigger window doesn't shrink concurrency for short requests.
 export GPU_UTIL="${GPU_UTIL:-0.9}"
 export CONC="${CONC:-8}"                   # don't over-crank: high CONC slows per-sim decode -> more timeouts
 export TRIALS="${TRIALS:-1}"
