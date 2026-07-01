@@ -4,8 +4,13 @@
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=64G
 #SBATCH --partition=gpubase_bygpu_b5
-#SBATCH --time=12:00:00
+#SBATCH --time=06:00:00
 #SBATCH --output=vulcan/logs/%x-%j.out
+# --time is per TASK (array) or per JOB (sequential). Queue wait dominates on Vulcan
+# and short jobs backfill sooner, so keep this tight: override DOWN once you know the
+# real per-point Elapsed (a 50/subcat point is ~2-4h). Sequential (all points in one
+# job) needs more -- override UP, e.g. --time=15:00:00. Check the queue before
+# committing: `squeue --start`, `sbatch --test-only ...`, `sinfo -p gpubase_bygpu_b5`.
 #
 # BFCL accuracy-vs-sparsity sweep on Gemma-4-12B *served by vLLM*, offline, one L40S
 # per point (BFCL is single-engine -- dense AND sparse alike; no 2-GPU case like tau2).
