@@ -110,6 +110,14 @@ RESULTS_JSON="$SIM_DIR/results.json"
 if [ "${FRESH:-0}" != "0" ]; then
     echo "[run_tau2_vllm] FRESH=1 -> clearing $SIM_DIR"
     rm -rf "$SIM_DIR"
+elif [ -f "$RESULTS_JSON" ]; then
+    # The save dir is keyed only by (sparsity, domain), so a re-run at the SAME point
+    # with a DIFFERENT setting (THINK / method / precision) collides with this file.
+    # --auto-resume then REUSES the old sims and re-scores instantly -- no regeneration
+    # -- which looks like the job "ran" but changed nothing. Warn loudly; use FRESH=1.
+    echo "[run_tau2_vllm] !!! $RESULTS_JSON already exists (sparsity=$SPARSITY domain=$DOMAIN)."
+    echo "[run_tau2_vllm] !!! --auto-resume will REUSE those sims and SKIP generation."
+    echo "[run_tau2_vllm] !!! If you changed THINK/method/etc., re-run with FRESH=1 to regenerate."
 fi
 
 # --- vLLM serving ---
