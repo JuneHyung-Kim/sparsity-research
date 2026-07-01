@@ -28,3 +28,6 @@ tau2_run*/
 
 # SLURM job logs
 vulcan/logs/
+
+# BFCL sparsity-sweep raw run artifacts (regenerable; summaries live in results/)
+bfcl_runs/

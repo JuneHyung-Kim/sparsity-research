@@ -25,14 +25,46 @@ Controlled by env (set per run by run_vllm.sh):
                   16384; keep == vLLM --max-model-len).
 """
 import os
+import re
 from typing import Any
 
 from bfcl_eval.model_handler.local_inference.base_oss_handler import OSSHandler
 from bfcl_eval.model_handler.utils import (
     combine_consecutive_user_prompts,
+    default_decode_ast_prompting,
+    default_decode_execute_prompting,
     system_prompt_pre_processing_chat_model,
 )
 from overrides import override
+
+# Gemma-4 usually answers in BFCL's `[func(a=1)]` text format (prompt mode), but in
+# some multi-step / agentic turns it falls back to its NATIVE tool-call DSL:
+#     <|tool_call>call:NAME(arg=val)<tool_call|>   (no-arg calls come as params={})
+# BFCL's default AST decoder only understands the bracket form, so those turns would
+# decode to nothing and be scored as an empty response even though the model DID emit
+# a call. We rewrite any native-DSL calls into the bracket form before decoding so the
+# score reflects the call, not a parser gap. Bracket-form output is passed through
+# unchanged (any interleaved prose is handled by the default decoder as before).
+_NATIVE_CALL = re.compile(r"<\|tool_call>\s*call:(.*?)<tool_call\|>", re.DOTALL)
+_NAME_ARGS = re.compile(r"([A-Za-z_][\w.]*)\s*\((.*)\)\s*$", re.DOTALL)
+_EMPTY_PARAMS = re.compile(r"^\s*params\s*=\s*\{\s*\}\s*$")
+
+
+def _native_to_bracket(text):
+    """Rewrite `<|tool_call>call:NAME(args)<tool_call|>` blocks into `[NAME(args)]`.
+    Returns text unchanged when no native-DSL call is present."""
+    if not isinstance(text, str) or "<|tool_call>" not in text:
+        return text
+    calls = []
+    for body in _NATIVE_CALL.findall(text):
+        m = _NAME_ARGS.match(body.strip())
+        if not m:
+            continue
+        name, args = m.group(1), m.group(2).strip()
+        if _EMPTY_PARAMS.match(args):   # no-arg call the model wrapped as params={}
+            args = ""
+        calls.append(f"{name}({args})")
+    return f"[{', '.join(calls)}]" if calls else text
 
 
 def _strip_thinking(text: str) -> str:
@@ -145,3 +177,13 @@ class Gemma4Handler(OSSHandler):
             "input_token": api_response.usage.prompt_tokens,
             "output_token": api_response.usage.completion_tokens,
         }
+
+    @override
+    def decode_ast(self, result, language, has_tool_call_tag):
+        return default_decode_ast_prompting(
+            _native_to_bracket(result), language, has_tool_call_tag)
+
+    @override
+    def decode_execute(self, result, has_tool_call_tag):
+        return default_decode_execute_prompting(
+            _native_to_bracket(result), has_tool_call_tag)

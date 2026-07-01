@@ -77,22 +77,38 @@ if [ "${FRESH:-0}" != "0" ]; then
     rm -rf "$ROOT/result" "$ROOT/score"
 fi
 
-# NCASES=N -> first N ids/category (fast subset). Writes BFCL's
-# test_case_ids_to_generate.json (ids "<category>_<i>", contiguous from 0) + --run-ids.
-# Use explicit category names in CATS (not group aliases) so the ids resolve.
+# NCASES=N -> N ids/category (fast subset) via BFCL's test_case_ids_to_generate.json
+# + --run-ids. Default = first N (contiguous). SUBSET_SEED=<int> -> a RANDOM N/category
+# instead (reproducible per seed), sampled from the category's real ids. CATS may be a
+# group alias (e.g. multi_turn) -- it is expanded to concrete categories here.
 RUN_IDS_FLAG=""
 PARTIAL_FLAG=""
 if [ -n "${NCASES:-}" ]; then
     mkdir -p "$ROOT"
-    "$BFCL_VENV/bin/python" - "$ROOT" "$CATS" "$NCASES" <<'PY'
-import json, os, sys
-root, cats, n = sys.argv[1], sys.argv[2].split(","), int(sys.argv[3])
-ids = {c: [f"{c}_{i}" for i in range(n)] for c in cats}
+    "$BFCL_VENV/bin/python" - "$ROOT" "$CATS" "$NCASES" "${SUBSET_SEED:-}" <<'PY'
+import json, os, re, sys, random
+from bfcl_eval._llm_response_generation import parse_test_category_argument, load_dataset_entry
+root, cats_arg, n = sys.argv[1], sys.argv[2], int(sys.argv[3])
+seed = sys.argv[4] if len(sys.argv) > 4 else ""
+cats = parse_test_category_argument([cats_arg])        # expand aliases -> real categories
+ids = {}
+if seed != "":
+    rng = random.Random(int(seed))
+    for c in cats:
+        all_ids = [e["id"] for e in load_dataset_entry(c)]      # dataset order (stable)
+        # the SET is fixed by the seed; sort only for a stable/readable file. Ids are
+        # not always <cat>_<int> (memory uses <cat>_<int>-<name>-<int>), so sort by a
+        # natural key that tolerates non-numeric suffixes.
+        ids[c] = sorted(rng.sample(all_ids, min(n, len(all_ids))),
+                        key=lambda s: [int(t) if t.isdigit() else t
+                                       for t in re.split(r"(\d+)", s)])
+else:
+    ids = {c: [f"{c}_{i}" for i in range(n)] for c in cats}
 json.dump(ids, open(os.path.join(root, "test_case_ids_to_generate.json"), "w"), indent=2)
 PY
     RUN_IDS_FLAG="--run-ids"
     PARTIAL_FLAG="--partial-eval"     # evaluate refuses a partial set unless told it's intentional
-    echo "[run_bfcl_vllm] NCASES=$NCASES -> first $NCASES ids/category via --run-ids"
+    echo "[run_bfcl_vllm] NCASES=$NCASES seed='${SUBSET_SEED:-first-N}' -> $NCASES ids/category via --run-ids"
 fi
 
 # --- vLLM serving env (self-contained; needed on the L40S nodes) ---
