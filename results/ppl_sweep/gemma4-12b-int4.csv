@@ -1,0 +1,7 @@
+config,model,sparsity,ppl,seconds
+gemma4-12b-int4,google/gemma-4-12B,0,9.4072,66.2
+gemma4-12b-int4,google/gemma-4-12B,0.5,9.5548,102.7
+gemma4-12b-int4,google/gemma-4-12B,0.6,9.7791,109.0
+gemma4-12b-int4,google/gemma-4-12B,0.7,10.3785,115.4
+gemma4-12b-int4,google/gemma-4-12B,0.8,12.2207,121.9
+gemma4-12b-int4,google/gemma-4-12B,0.9,20.9105,128.3

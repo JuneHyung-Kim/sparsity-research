@@ -22,6 +22,14 @@ def get_decoder_layers(model):
     base = model.model
     if hasattr(base, "layers"):
         return base.layers
+    # Multimodal wrapper (e.g. Gemma 4 Unified): the text decoder is nested under
+    # .language_model (itself a CausalLM wrapper holding .model.layers). Reach it
+    # so the masker still wraps the SwiGLU/GeGLU FFNs of the text tower.
+    lm = getattr(base, "language_model", None)
+    if lm is not None:
+        lm_base = getattr(lm, "model", lm)
+        if hasattr(lm_base, "layers"):
+            return lm_base.layers
     if hasattr(base, "decoder") and hasattr(base.decoder, "layers"):
         return base.decoder.layers
     raise AttributeError("could not locate decoder layers")
@@ -34,12 +42,14 @@ class SparseMLP(nn.Module):
         self.ctrl = ctrl          # shared {"masker": fn|None, "recorder": fn|None}
         self.idx = idx
         # ||down_proj[:, i]||_2 per neuron i (weight is [hidden, intermediate]).
-        # Under weight-only quantization (bnb int8/4bit) the stored .weight is
-        # packed integers, not a float matrix — column norms are unavailable
-        # without a dequant. oracle_gate (rank by |a|) doesn't need them, so we
-        # leave col_norm None there; only contribution-aware paths require it.
-        w = mlp.down_proj.weight
-        col_norm = w.detach().float().norm(dim=0) if w.is_floating_point() else None
+        # Under weight-only quantization the stored weight is packed integers
+        # (bnb) or lives under another attribute entirely (AWQ .qweight, CT
+        # .weight_packed) — column norms are unavailable without a dequant.
+        # oracle_gate (rank by |a|) doesn't need them, so we leave col_norm
+        # None there; only contribution-aware paths require it.
+        w = getattr(mlp.down_proj, "weight", None)
+        col_norm = (w.detach().float().norm(dim=0)
+                    if w is not None and w.is_floating_point() else None)
         self.register_buffer("col_norm", col_norm, persistent=False)
 
     def forward(self, x):

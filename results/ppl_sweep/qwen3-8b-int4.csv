@@ -1,0 +1,7 @@
+config,model,sparsity,ppl,seconds
+qwen3-8b-int4,Qwen/Qwen3-8B-AWQ,0,10.1801,73.1
+qwen3-8b-int4,Qwen/Qwen3-8B-AWQ,0.5,10.2015,96.1
+qwen3-8b-int4,Qwen/Qwen3-8B-AWQ,0.6,10.2999,99.8
+qwen3-8b-int4,Qwen/Qwen3-8B-AWQ,0.7,10.5535,103.6
+qwen3-8b-int4,Qwen/Qwen3-8B-AWQ,0.8,11.3298,107.4
+qwen3-8b-int4,Qwen/Qwen3-8B-AWQ,0.9,16.9363,111.5
