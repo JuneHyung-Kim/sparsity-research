@@ -12,8 +12,9 @@ __pycache__/
 *.swp
 *.swo
 
-# BFCL (separate env + run artifacts)
-.venv-bfcl/
+# BFCL (separate env + run artifacts). No trailing slash: in a git worktree the
+# env is a symlink to the primary checkout's venv, not a directory.
+.venv-bfcl
 bfcl_run*/
 
 # tau2-bench (separate env + cloned upstream + run artifacts)
@@ -21,8 +22,9 @@ bfcl_run*/
 tau2-bench/
 tau2_run*/
 
-# vLLM (separate env; pinned torch 2.11.0 -- never commit)
-.venv-vllm/
+# vLLM (separate env; pinned torch 2.11.0 -- never commit). No trailing slash:
+# symlinked to the primary checkout's venv in a worktree.
+.venv-vllm
 
 # SLURM job logs
 vulcan/logs/
