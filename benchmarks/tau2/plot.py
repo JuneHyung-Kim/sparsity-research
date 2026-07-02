@@ -46,6 +46,27 @@ def series(records, metric):
     return rows
 
 
+def aggregate(rows):
+    """{domain: [(s, v)]} -> single averaged series [(s, mean over domains)].
+
+    Unweighted domain mean (the model card's "average over 3" convention; with
+    equal task counts per domain it equals pooling). Only sparsities present in
+    ALL domains are averaged -- an incomplete point would silently skew the mean.
+    Returns (series, dropped_sparsities).
+    """
+    by_s = {}
+    for d, pts in rows.items():
+        for s, v in pts:
+            by_s.setdefault(s, {})[d] = v
+    series, dropped = [], []
+    for s in sorted(by_s):
+        if len(by_s[s]) == len(rows):
+            series.append((s, sum(by_s[s].values()) / len(by_s[s])))
+        else:
+            dropped.append(s)
+    return series, dropped
+
+
 def pivot_table(records, metric):
     domains = sorted({r["domain"] for r in records})
     sps = sorted({r["sparsity"] for r in records})
@@ -73,6 +94,9 @@ def main():
     ap.add_argument("--csv", default="results/tau2_passk_vs_sparsity.csv")
     ap.add_argument("--md", default="results/tau2_passk_vs_sparsity.md")
     ap.add_argument("--title", default="tau2-bench vs activation sparsity (Gemma-4-12B)")
+    ap.add_argument("--aggregate", action="store_true",
+                    help="plot ONE line: the unweighted mean over domains "
+                         "(only sparsities present in every domain)")
     args = ap.parse_args()
 
     records = collect(args.runs_dir)
@@ -101,10 +125,22 @@ def main():
 
     rows = series(records, args.metric)
     plt.figure(figsize=(7, 5))
-    for d, pts in sorted(rows.items()):
-        xs = [p[0] for p in pts]
-        ys = [p[1] for p in pts]
-        plt.plot(xs, ys, marker="o", label=d)
+    if args.aggregate:
+        avg, dropped = aggregate(rows)
+        if dropped:
+            print(f"note: sparsity point(s) {dropped} missing in some domain(s) "
+                  "-- excluded from the average")
+        xs = [p[0] for p in avg]
+        ys = [p[1] for p in avg]
+        plt.plot(xs, ys, marker="o", color="black",
+                 label=f"avg over {len(rows)} domains")
+        for s, v in avg:
+            print(f"  avg s={s:.2f}: {v:.3f}")
+    else:
+        for d, pts in sorted(rows.items()):
+            xs = [p[0] for p in pts]
+            ys = [p[1] for p in pts]
+            plt.plot(xs, ys, marker="o", label=d)
     plt.xlabel("per-token FFN activation sparsity (agent)")
     plt.ylabel(args.metric)
     plt.title(title)
