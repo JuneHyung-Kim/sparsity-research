@@ -36,6 +36,11 @@
 #   sbatch --array=0-4 --export=ALL,CATS=single_turn,THINK=0,NCASES=,SUBSET_SEED=,SWEEP_BASE=$PWD/bfcl_runs/single_turn_bf16 \
 #          vulcan/bfcl_sweep.slurm
 #
+# Qwen3-8B (served weights Qwen/Qwen3-8B, scored via the built-in FC handler id), the
+# READY tier = single_turn / THINK=0 (multi_turn/memory need Qwen thinking wired first):
+#   sbatch --array=0-4 --export=ALL,MODEL=Qwen/Qwen3-8B,BFCL_MODEL=Qwen/Qwen3-8B-FC,CATS=single_turn,THINK=0,NCASES=,SUBSET_SEED=,SWEEP_BASE=$PWD/bfcl_runs/qwen3-8b_single_turn_bf16 \
+#          vulcan/bfcl_sweep.slurm
+#
 # Knobs: CATS, METHODS (oracle_gate), POINTS (incl dense 0), THINK, NCASES+SUBSET_SEED
 # (empty SUBSET_SEED->first-N, empty NCASES->full), QUANT (bf16), MAXLEN (32768;
 # reasoning + multi_turn_long_context accumulate), GPU_UTIL, NUM_THREADS, SWEEP_BASE,
@@ -50,15 +55,20 @@ export TRANSFORMERS_OFFLINE=1
 export VLLM_NO_USAGE_STATS=1
 export DO_NOT_TRACK=1
 
-export MODEL="${MODEL:-google/gemma-4-12B-it}"
+export MODEL="${MODEL:-google/gemma-4-12B-it}"    # served weights / vLLM
+# bfcl registry id (handler). == MODEL for Gemma; for Qwen FC: MODEL=Qwen/Qwen3-8B,
+# BFCL_MODEL=Qwen/Qwen3-8B-FC.
+export BFCL_MODEL="${BFCL_MODEL:-$MODEL}"
 export METHODS="${METHODS:-oracle_gate}"          # the fixed reported oracle (no gateonly)
 export CATS="${CATS:-multi_turn,memory}"          # THINK=1 tiers; single_turn -> separate job
 export QUANT="${QUANT:-bf16}"                     # bf16 on the L40S (fp8 = the 24GB dev box)
 export MAXLEN="${MAXLEN:-32768}"                  # thinking + multi_turn_long_context need it
 export GPU_UTIL="${GPU_UTIL:-0.9}"
 export THINK="${THINK:-1}"                        # multi_turn/memory reason; single_turn=0
-export NCASES="${NCASES:-50}"                     # random cases per subcategory
-export SUBSET_SEED="${SUBSET_SEED:-0}"            # reproducible random subset
+# No-colon defaults: an explicit empty value (NCASES=) means FULL set / first-N, and
+# is NOT overwritten by the default (unlike ${VAR:-def}).
+export NCASES="${NCASES-50}"                      # random cases per subcategory ("" => full)
+export SUBSET_SEED="${SUBSET_SEED-0}"             # reproducible random subset ("" => first-N)
 export NUM_THREADS="${NUM_THREADS:-24}"
 export SWEEP_BASE="${SWEEP_BASE:-$PWD/bfcl_runs/mt_mem_bf16}"
 export SKIP_EXISTING="${SKIP_EXISTING:-1}"        # resume: skip already-scored points
