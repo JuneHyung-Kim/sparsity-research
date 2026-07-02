@@ -37,6 +37,10 @@ METHOD="${2:-oracle_gate}"
 CATS="${3:-single_turn,multi_turn}"
 
 MODEL="${MODEL:-google/gemma-4-12B-it}"
+# BFCL's model-registry id (handler lookup). Usually == MODEL, but some models are
+# registered under a distinct id whose weights are MODEL, e.g. Qwen3-8B served for
+# BFCL's function-calling handler: MODEL=Qwen/Qwen3-8B, BFCL_MODEL=Qwen/Qwen3-8B-FC.
+BFCL_MODEL="${BFCL_MODEL:-$MODEL}"
 VLLM_VENV="${VLLM_VENV:-.venv-vllm}"
 case "$VLLM_VENV" in /*) ;; *) VLLM_VENV="$PWD/$VLLM_VENV" ;; esac
 BFCL_VENV="${BFCL_VENV:-.venv-bfcl}"
@@ -159,10 +163,10 @@ export REMOTE_OPENAI_API_KEY="EMPTY"
 export BFCL_THINK="$THINK"
 export BFCL_MAX_CTX="$MAXLEN"
 
-"$BFCL_VENV/bin/python" benchmarks/bfcl/_bfcl_cli.py generate --model "$MODEL" \
+"$BFCL_VENV/bin/python" benchmarks/bfcl/_bfcl_cli.py generate --model "$BFCL_MODEL" \
     --test-category "$CATS" --skip-server-setup --local-model-path "$SNAP" \
     --num-threads "$NUM_THREADS" $RUN_IDS_FLAG
-"$BFCL_VENV/bin/python" benchmarks/bfcl/_bfcl_cli.py evaluate --model "$MODEL" \
+"$BFCL_VENV/bin/python" benchmarks/bfcl/_bfcl_cli.py evaluate --model "$BFCL_MODEL" \
     --test-category "$CATS" $PARTIAL_FLAG
 
 echo "[run_bfcl_vllm] scores -> $ROOT/score/"
